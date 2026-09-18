@@ -1,0 +1,245 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Blue-gradient theme */
+  --color-ink: #10212b; /* headings, primary text */
+  --color-ink-soft: #4b6472; /* body text */
+  --color-muted: #7c8f99; /* placeholders, secondary text */
+  --color-border: #d7e7ee; /* hairline borders on cards/inputs */
+  --color-surface: #ffffff; /* card background */
+  --color-surface-muted: #f2f9fb; /* input background */
+
+  --color-primary: #159adc; /* signature accent — ties to the bg gradient */
+  --color-primary-dark: #0f7ab0; /* hover state */
+  --color-primary-soft: #e3f4fb; /* focus rings, tinted alerts */
+
+  --gradient-app: linear-gradient(
+    124deg,
+    rgba(255, 255, 255, 0.51) 0%,
+    rgba(202, 229, 237, 1) 47%,
+    rgba(62, 187, 237, 1) 100%
+  );
+
+  /* Typography scale — weight + letter-spacing (tracking) defined once,
+     every heading/body element below inherits it automatically */
+  --font-weight-display: 800; /* h1 — page titles */
+  --font-weight-heading: 700; /* h2 — section titles */
+  --font-weight-subheading: 600; /* h3, labels, buttons */
+  --font-weight-body: 400; /* p, default text */
+
+  /* Letter-spacing scale — widened. Large text still pulls in slightly
+     (standard practice — bigger glyphs read as too spaced-out otherwise),
+     but body/label/button spacing is now more open than before. */
+  --tracking-display: -0.02em; /* h1 — was -0.03em, now less tight */
+  --tracking-heading: -0.005em; /* h2 — was -0.02em */
+  --tracking-subheading: 0.005em; /* h3, labels, buttons — was -0.01em */
+  --tracking-body: 0.01em; /* p, inputs — was 0em */
+  --tracking-wide: 0.06em; /* NEW — uppercase eyebrows, badges, tags */
+
+  /* Data table typography — managed centrally so header/cell sizing and
+     color can be tuned here without touching component code. */
+  --text-table-header: 13.5px; /* column header labels */
+  --text-table-cell: 15.5px; /* row cell text */
+  --color-table-header: var(
+    --color-ink-soft
+  ); /* darker than --color-muted for legibility */
+  --color-table-cell: var(
+    --color-ink
+  ); /* darker than --color-ink-soft for legibility */
+
+  /* Selected-row background — deeper than --color-primary-soft (the card's
+     own background) so a selected row stays visibly distinct instead of
+     blending into the card. */
+  --color-row-selected: #c9e9f8;
+
+  /* Fixed table body height — keeps the table's footprint stable across
+     pages/filters that return fewer rows than a full page, instead of the
+     card shrinking and the page layout jumping. Tune to taste. */
+  --table-min-height: 520px;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+
+  /* ---- Sidebar tokens — themed off the blue palette above ----
+     This is the ONLY place to edit to change sidebar bg / active / hover colors. */
+  --sidebar: var(--color-surface); /* sidebar background */
+  --sidebar-foreground: var(--color-ink); /* default text/icon color */
+  --sidebar-primary: var(--color-primary); /* ACTIVE tab background */
+  --sidebar-primary-foreground: #ffffff; /* ACTIVE tab text/icon */
+  --sidebar-accent: var(--color-primary-soft); /* HOVER background */
+  --sidebar-accent-foreground: var(--color-primary-dark); /* HOVER text/icon */
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-primary);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-surface: var(--color-surface);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary-soft: var(--color-primary-soft);
+  --tracking-wide: var(--tracking-wide);
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+body {
+  /* background: black; */
+  background-attachment: fixed;
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+}
+
+/* ---- Global typography ---- */
+@layer base {
+  h1 {
+    font-weight: var(--font-weight-display);
+    letter-spacing: var(--tracking-display);
+    color: var(--color-ink);
+  }
+
+  h2 {
+    font-weight: var(--font-weight-heading);
+    letter-spacing: var(--tracking-heading);
+    color: var(--color-ink);
+  }
+
+  h3,
+  h4 {
+    font-weight: var(--font-weight-subheading);
+    letter-spacing: var(--tracking-subheading);
+    color: var(--color-ink);
+  }
+
+  p {
+    font-weight: var(--font-weight-body);
+    letter-spacing: var(--tracking-body);
+    line-height: 1.6;
+    color: var(--color-ink-soft);
+  }
+
+  label {
+    font-weight: var(--font-weight-subheading);
+    letter-spacing: var(--tracking-subheading);
+    color: var(--color-ink);
+  }
+
+  button {
+    font-weight: var(--font-weight-subheading);
+    letter-spacing: var(--tracking-subheading);
+  }
+
+  input,
+  textarea,
+  select {
+    font-weight: var(--font-weight-body);
+    letter-spacing: var(--tracking-body);
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}

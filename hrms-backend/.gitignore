@@ -1,0 +1,69 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.testing
+auth.json
+*.pem
+*.key
+*.crt
+
+# PHP and Composer
+/vendor/
+composer.phar
+
+# Node and Vite
+/node_modules/
+/public/build/
+/public/hot
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Laravel runtime files
+/storage/app/*
+!/storage/app/public/
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+/bootstrap/cache/*.php
+/bootstrap/cache/packages.php
+/bootstrap/cache/services.php
+
+# Laravel generated links and temporary output
+/public/storage
+/storage/pail
+/storage/*.key
+
+# Local databases
+/database/*.sqlite
+/database/*.sqlite-journal
+/database/*.db
+
+# Tests, coverage, and local tooling output
+.phpunit.result.cache
+/coverage/
+phpunit.xml.bak
+/.phpunit.cache/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+/.cache/
