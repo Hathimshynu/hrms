@@ -491,6 +491,9 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Token refreshed successfully.',
                 'data' => [
+                    // Additive for native clients - see the matching note in
+                    // authenticatedResponse(). Web ignores this field.
+                    'access_token' => $newToken,
                     'expiresIn' => config('jwt.ttl') * 60,
                     'rememberMe' => $rememberMe,
                 ],
@@ -606,6 +609,15 @@ class AuthController extends Controller
                 'user' => new UserResource(
                     $user->load('role')
                 ),
+                // The web client never reads this - it relies solely on the
+                // httpOnly cookie below. Included additively for native
+                // clients (React Native), which cannot reliably read/persist
+                // an httpOnly cookie and instead store this in secure storage
+                // and send it as `Authorization: Bearer <token>` - a header
+                // the `auth:api` JWT guard already accepts natively
+                // (see AddJwtCookieToRequest, which only falls back to the
+                // cookie when no Bearer header is already present).
+                'access_token' => $token,
                 'expires_in' => config('jwt.ttl') * 60,
                 'provider' => $provider,
                 'remember_me' => $rememberMe,

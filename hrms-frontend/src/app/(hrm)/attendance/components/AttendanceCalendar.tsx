@@ -1,5 +1,6 @@
 "use client";
 
+import { getTodayIST, todayISTAsLocalDate } from "@/src/lib/date/format";
 import {
   addDays,
   addMonths,
@@ -7,7 +8,6 @@ import {
   format,
   isSameDay,
   isSameMonth,
-  isToday,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/src/components/ui/Button";
+import type { AttendanceStatus } from "@/src/lib/attendance/attendance.types";
 import { cn } from "@/src/lib/utils/utils";
 
 interface AttendanceCalendarProps {
@@ -23,8 +24,11 @@ interface AttendanceCalendarProps {
   selected: Date | null;
   /** Called when a day is clicked */
   onSelect: (date: Date) => void;
-  /** Extra leave / holiday dates beyond Sundays, e.g. ["2026-08-15", "2026-08-28"] */
-  leaveDates?: string[];
+  /** Called whenever the visible month changes, so the parent can fetch that month's data */
+  onMonthChange?: (month: Date) => void;
+  /** Real backend status per day (yyyy-MM-dd -> status), from GET /attendance/calendar */
+  statusByDate?: Record<string, AttendanceStatus>;
+  isLoading?: boolean;
   className?: string;
 }
 
@@ -38,24 +42,29 @@ const WEEKDAYS = [
   "Saturday",
 ];
 
-/** Company holidays / declared leave dates (yyyy-MM-dd) */
-const DEFAULT_LEAVE_DATES = ["2026-08-15", "2026-08-28"];
+// Matches the real `attendances.status` enum (hrms-backend migration) -
+// only statuses that can actually be returned are styled here.
+const STATUS_DOT: Record<AttendanceStatus, string> = {
+  Present: "bg-emerald-500",
+  Late: "bg-amber-500",
+  "Half Day": "bg-orange-500",
+  "On Leave": "bg-purple-500",
+  Absent: "bg-red-500",
+  Holiday: "bg-pink-500",
+  "Week Off": "bg-slate-400",
+};
 
 export function AttendanceCalendar({
   selected,
   onSelect,
-  leaveDates = DEFAULT_LEAVE_DATES,
+  onMonthChange,
+  statusByDate = {},
+  isLoading = false,
   className,
 }: AttendanceCalendarProps) {
   const [currentMonth, setCurrentMonth] = React.useState<Date>(
-    () => selected ?? new Date(),
+    () => selected ?? todayISTAsLocalDate(),
   );
-
-  const leaveDateSet = React.useMemo(() => new Set(leaveDates), [leaveDates]);
-
-  /* ---------------------------------------------------------------------- */
-  /* Build full 7-column (Sun-Sat) grid for the visible month               */
-  /* ---------------------------------------------------------------------- */
 
   const days = React.useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -67,11 +76,16 @@ export function AttendanceCalendar({
     });
   }, [currentMonth]);
 
-  const handlePrevMonth = () => setCurrentMonth((m) => subMonths(m, 1));
-  const handleNextMonth = () => setCurrentMonth((m) => addMonths(m, 1));
+  const changeMonth = (next: Date) => {
+    setCurrentMonth(next);
+    onMonthChange?.(next);
+  };
+
+  const handlePrevMonth = () => changeMonth(subMonths(currentMonth, 1));
+  const handleNextMonth = () => changeMonth(addMonths(currentMonth, 1));
   const handleToday = () => {
-    const now = new Date();
-    setCurrentMonth(now);
+    const now = todayISTAsLocalDate();
+    changeMonth(now);
     onSelect(now);
   };
 
@@ -118,15 +132,13 @@ export function AttendanceCalendar({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4 px-5 pb-2">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-primary" />
-          <span className="text-xs text-muted">Working Day</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          <span className="text-xs text-muted">Leave / Holiday</span>
-        </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-5 pb-2">
+        {(Object.keys(STATUS_DOT) as AttendanceStatus[]).map((status) => (
+          <div key={status} className="flex items-center gap-1.5">
+            <span className={cn("h-2 w-2 rounded-full", STATUS_DOT[status])} />
+            <span className="text-xs text-muted">{status}</span>
+          </div>
+        ))}
       </div>
 
       <div className="grid shrink-0 grid-cols-7 border-t border-border bg-surface-muted">
@@ -140,15 +152,19 @@ export function AttendanceCalendar({
         ))}
       </div>
 
-      <div className="grid flex-1 grid-cols-7 grid-rows-6 border-t border-border">
+      <div className="relative grid flex-1 grid-cols-7 grid-rows-6 border-t border-border">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+          </div>
+        )}
+
         {days.map((day) => {
           const key = format(day, "yyyy-MM-dd");
           const inMonth = isSameMonth(day, currentMonth);
           const active = selected ? isSameDay(day, selected) : false;
-          const today = isToday(day);
-
-          const isSunday = day.getDay() === 0;
-          const isLeave = isSunday || leaveDateSet.has(key);
+          const today = key === getTodayIST();
+          const status = statusByDate[key];
 
           return (
             <button
@@ -156,35 +172,22 @@ export function AttendanceCalendar({
               type="button"
               onClick={() => onSelect(day)}
               className={cn(
-                "relative flex w-full flex-col items-center justify-center gap-0.5 border-r border-b border-border text-sm transition-colors nth-[7n]:border-r-0",
+                "relative flex w-full flex-col items-center justify-center gap-1 border-r border-b border-border text-sm transition-colors nth-[7n]:border-r-0",
                 !inMonth && "opacity-30",
-                isLeave
-                  ? "bg-red-50 hover:bg-red-100"
-                  : "bg-primary-soft hover:bg-primary-soft/70",
+                "bg-surface hover:bg-surface-muted",
                 active && "ring-2 ring-inset ring-primary",
               )}
             >
               <span
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
-                  today
-                    ? "bg-primary text-white"
-                    : isLeave
-                      ? "text-red-600"
-                      : "text-primary-dark",
+                  today ? "bg-primary text-white" : "text-ink",
                 )}
               >
                 {format(day, "d")}
               </span>
 
-              <span
-                className={cn(
-                  "text-[0.6rem] font-medium",
-                  isLeave ? "text-red-500" : "text-primary",
-                )}
-              >
-                {/* {isLeave ? (isSunday ? "Sunday" : "Leave") : "Working"} */}
-              </span>
+              {status && <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status])} />}
             </button>
           );
         })}

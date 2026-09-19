@@ -76,7 +76,7 @@ class UpdateEmployeeRequest extends FormRequest
 
             'employment_type' => [
                 'sometimes',
-                'in:full_time,part_time,contract,intern',
+                'in:Full Time,Part Time,Contract,Intern,Temporary',
             ],
 
             'probation_end_date' => [
@@ -113,7 +113,7 @@ class UpdateEmployeeRequest extends FormRequest
 
             'work_mode' => [
                 'nullable',
-                'in:office,remote,hybrid',
+                'in:Office,Remote,Hybrid',
             ],
 
             'employment_status' => [

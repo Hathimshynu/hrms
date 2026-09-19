@@ -1,55 +1,36 @@
 "use client";
 
+import { formatDate } from "@/src/lib/date/format";
 import { Button } from "@/src/components/ui/Button";
 import { Drawer, DrawerContent } from "@/src/components/ui/drawer";
+import { parseApiError } from "@/src/lib/api/errors";
 import {
-  Award,
+  employeeService,
+  type EmployeeDetail,
+} from "@/src/lib/employees/employee.service";
+import {
   Briefcase,
   Building,
   Calendar,
   CheckCircle,
-  Clock,
-  Download,
-  FileText,
   FolderOpen,
   Hash,
-  Languages,
   Mail,
-  MapPin,
-  Pencil,
   Phone,
-  Shield,
-  Trash2,
   User,
   UserCircle,
-  Users,
   Wallet,
   X,
 } from "lucide-react";
-import { memo, useState, type ComponentType, type ReactNode } from "react";
-
-interface Person {
-  id: string;
-  name: string;
-  avatar?: string;
-  jobTitle: string;
-  department: string;
-  site: string;
-  salary: number;
-  joineddate: string;
-  lifecycle: "Hired" | "Employed";
-  status: "Active" | "Invited" | "Inactive";
-}
+import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 interface ViewEmployeeProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  employee: Person | null;
+  employeeId: number | null;
 }
 
 type IconType = ComponentType<{ className?: string }>;
-
-/* ---------- Small reusable building blocks ---------- */
 
 function InfoField({
   icon: Icon,
@@ -58,7 +39,7 @@ function InfoField({
 }: {
   icon?: IconType;
   label: string;
-  value: string;
+  value: string | null | undefined;
 }) {
   return (
     <div className="flex items-start gap-3 py-2">
@@ -66,12 +47,8 @@ function InfoField({
         {Icon && <Icon className="h-4 w-4 text-muted" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-          {label}
-        </p>
-        <p className="text-sm text-ink mt-0.5 wrap-break-word">
-          {value || "-"}
-        </p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</p>
+        <p className="text-sm text-ink mt-0.5 wrap-break-word">{value || "-"}</p>
       </div>
     </div>
   );
@@ -79,9 +56,7 @@ function InfoField({
 
 function Panel({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-surface rounded-2xl shadow-sm border border-border/80 p-6">
-      {children}
-    </div>
+    <div className="bg-surface rounded-2xl shadow-sm border border-border/80 p-6">{children}</div>
   );
 }
 
@@ -105,38 +80,35 @@ function SectionHeader({
   );
 }
 
-function InfoSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function InfoSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="mb-8 last:mb-0">
       <h4 className="text-sm font-semibold text-ink mb-4 pb-2 border-b border-border/60">
         {title}
       </h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
-        {children}
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">{children}</div>
+    </div>
+  );
+}
+
+function NotAvailableNotice({ what }: { what: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-muted">
+      {what} isn&apos;t returned by the employee profile API yet, so it can&apos;t be shown here.
     </div>
   );
 }
 
 const statusStyles: Record<string, string> = {
-  Confirmed: "bg-green-100 text-green-700",
   Active: "bg-green-100 text-green-700",
+  Onboarding: "bg-blue-100 text-blue-700",
   Invited: "bg-amber-100 text-amber-700",
   Inactive: "bg-gray-100 text-gray-600",
+  "On Leave": "bg-orange-100 text-orange-700",
+  Terminated: "bg-red-100 text-red-700",
 };
 
-type TabId =
-  | "personal"
-  | "employment"
-  | "financial"
-  | "documents"
-  | "onboarding";
+type TabId = "personal" | "employment" | "financial" | "documents" | "onboarding";
 
 const TABS: { id: TabId; label: string; icon: IconType }[] = [
   { id: "personal", label: "Personal Info", icon: User },
@@ -146,137 +118,59 @@ const TABS: { id: TabId; label: string; icon: IconType }[] = [
   { id: "onboarding", label: "Onboarding", icon: CheckCircle },
 ];
 
-export const ViewEmployee = memo(function ViewEmployee({
-  isOpen,
-  setIsOpen,
-  employee,
-}: ViewEmployeeProps) {
+export function ViewEmployee({ isOpen, setIsOpen, employeeId }: ViewEmployeeProps) {
   const [activeTab, setActiveTab] = useState<TabId>("personal");
+  const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const employeeData = {
-    name: "Jai Saran",
-    firstName: "Jai",
-    lastName: "Saran",
-    jobTitle: "Frontend Developer",
-    employmentType: "Full-Time",
-    workMode: "Remote",
-    department: "Engineering",
-    employeeId: "EMP-2023-089",
-    status: "Confirmed",
-    workEmail: "jai.saran@workforce.com",
-    personalEmail: "jai.saran92@gmail.com",
-    phone: "+91 98765 43210",
-    alternatePhone: "+91 98765 43211",
-    dateOfBirth: "15/08/1992",
-    gender: "Male",
-    maritalStatus: "Married",
-    teamDepartment: "Engineering (Product)",
-    designation: "Senior Frontend Developer",
-    workLocation: "Bangalore, India",
-    workModeDetailed: "Hybrid (3 Days Office)",
-    shiftSchedule: "General Shift (10:00 AM - 07:00 PM)",
-    employmentLevel: "L3 - Mid Level",
-    reportingManager: "Priya Sharma",
-    joiningDate: "15/03/2023",
-    probationEndDate: "15/09/2023",
-    workPhone: "+91 98765 43212",
-    role: "Senior Frontend Developer",
-    username: "jai.saran",
-    accessLevel: "Level 3 - Full Access",
+  const loadEmployee = useCallback(async () => {
+    if (!isOpen || !employeeId) return;
 
-    currentAddress: {
-      line1: "Apt 402, Skyline Towers",
-      line2: "HSR Layout, Sector 2",
-      city: "Bangalore",
-      state: "Karnataka",
-      country: "India",
-      postalCode: "560102",
-    },
-    permanentAddress: {
-      line1: "123, Green Valley",
-      line2: "Sector 15, Phase 2",
-      city: "Gurugram",
-      state: "Haryana",
-      country: "India",
-      postalCode: "122001",
-    },
+    setIsLoading(true);
+    setLoadError(null);
+    setActiveTab("personal");
 
-    emergencyContact: {
-      name: "Sita Saran",
-      phone: "+91 98765 43213",
-      relationship: "Spouse",
-      alternatePhone: "+91 98765 43214",
-      address:
-        "Apt 402, Skyline Towers, HSR Layout, Bangalore, Karnataka, 560102",
-    },
+    try {
+      setEmployee(await employeeService.show(employeeId));
+    } catch (err) {
+      setLoadError(parseApiError(err, "Failed to load employee.").message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isOpen, employeeId]);
 
-    salaryType: "Monthly CTC",
-    annualCTC: "₹24,00,000",
-    basicSalary: "₹9,60,000",
-    hra: "₹4,80,000",
-    otherAllowances: "₹6,00,000",
-    bonus: "₹3,60,000",
-    payFrequency: "Monthly",
-    effectiveFrom: "01/04/2023",
+  // Loading employee data when the drawer opens for a given id is a
+  // genuine effect, not derivable during render - same loader pattern
+  // used by the Departments/Designations/People list pages.
+  useEffect(() => {
+    loadEmployee(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [loadEmployee]);
 
-    bankName: "HDFC Bank Ltd.",
-    accountHolderName: "Jai Saran",
-    accountNumber: "XXXX-XXXX-5678",
-    ifscCode: "HDFC0001234",
-    accountType: "Savings",
-    panNumber: "ABCDE1234F",
-    uan: "123456789012",
-    pfNumber: "KA/BLR/123456",
-
-    documents: [
-      { name: "Aadhaar Card.pdf", type: "Identity Proof", size: "1.2 MB" },
-      { name: "Degree_Certificate.pdf", type: "Education", size: "2.4 MB" },
-      { name: "Offer_Letter.pdf", type: "Employment", size: "856 KB" },
-      { name: "PAN_Card.jpg", type: "Identity Proof", size: "456 KB" },
-    ],
-
-    highestQualification: "B.Tech - Computer Science",
-    university: "Indian Institute of Technology",
-    yearsOfExperience: "8 years",
-    previousCompany: "Google India",
-    languages: ["English (Fluent)", "Hindi (Native)", "Kannada (Intermediate)"],
-
-    leavePolicy: "Standard Leave Policy (21 days)",
-    workSchedule: "Monday to Friday",
-    weeklyOff: "Saturday & Sunday",
-    overtimePolicy: "OT approved on request",
-    attendancePolicy: "Flexible Timings",
-    shift: "Day Shift",
-    latePolicy: "3 late arrivals allowed per month",
-
-    onboardingStatus: "Completed",
-    onboardingStartDate: "01/03/2023",
-    onboardingChecklist: "Full Onboarding Checklist",
-    assignedBuddy: "Rahul Verma",
-    equipmentRequired: "MacBook Pro, 2x Monitors, Headset",
-    hrNotes:
-      "Completed all onboarding tasks successfully. Excellent performance during probation.",
-  };
-
-  const handleExport = () => console.log("Export employee data");
-  const handleEdit = () => console.log("Edit employee");
-  const handleDelete = () => console.log("Delete employee");
+  const name = employee ? `${employee.first_name} ${employee.last_name}`.trim() : "";
 
   return (
-    <Drawer
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      swipeDirection="right"
-      modal={true}
-    >
+    <Drawer open={isOpen} onOpenChange={setIsOpen} swipeDirection="right" modal={true}>
       <DrawerContent
         title="Employee Profile"
-        description="View complete employee information"
+        description="View employee information"
         onClose={() => setIsOpen(false)}
         className="min-w-200 max-w-225 w-225"
       >
         <div className="flex h-full min-h-0 flex-col bg-surface-muted">
-          {employee && (
+          {isLoading && (
+            <div className="flex flex-1 items-center justify-center">
+              <span className="h-8 w-8 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+            </div>
+          )}
+
+          {!isLoading && loadError && (
+            <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-red-600">
+              {loadError}
+            </div>
+          )}
+
+          {!isLoading && employee && (
             <>
               <div className="shrink-0 bg-surface border-b border-border">
                 <div className="h-24 bg-linear-to-r from-primary via-indigo-600 to-purple-600" />
@@ -285,65 +179,37 @@ export const ViewEmployee = memo(function ViewEmployee({
                   <div className="flex items-center justify-between gap-4 flex-wrap -mt-10">
                     <div className="flex items-center gap-4">
                       <div className="h-20 w-20 rounded-2xl bg-linear-to-br from-primary to-purple-600 flex items-center justify-center text-3xl font-semibold text-white shadow-lg ring-4 ring-surface shrink-0">
-                        {employeeData.name.charAt(0)}
+                        {name.charAt(0) || "?"}
                       </div>
                       <div className="pt-10">
                         <h2 className="text-2xl font-bold text-ink tracking-tight leading-tight">
-                          {employeeData.name}
+                          {name}
                         </h2>
                         <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-ink-soft">
-                          <span>{employeeData.jobTitle}</span>
+                          <span>{employee.designation?.name || "—"}</span>
                           <span className="w-1 h-1 bg-muted rounded-full" />
-                          <span>{employeeData.employmentType}</span>
+                          <span>{employee.employment_type || "—"}</span>
                           <span className="w-1 h-1 bg-muted rounded-full" />
-                          <span>{employeeData.workMode}</span>
+                          <span>{employee.work_mode || "—"}</span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="flex gap-2 pt-10">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExport}
-                        className="flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-[#FF7F50] px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#E97451] hover:scale-105"
-                      >
-                        <Download className="h-4 w-4" />
-                        Export
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleEdit}
-                        className="flex h-10 sm:h-12 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-primary px-3.5 sm:px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-primary-dark hover:scale-105"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDelete}
-                        className="flex h-10 sm:h-12 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3.5 sm:px-4 text-sm font-semibold text-white transition-all duration-200 hover:scale-105"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </Button>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 mt-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-soft text-primary border border-primary/20">
-                      {employeeData.department}
-                    </span>
+                    {employee.department && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-soft text-primary border border-primary/20">
+                        {employee.department.name}
+                      </span>
+                    )}
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-ink-soft border border-border">
-                      {employeeData.employeeId}
+                      {employee.employee_code}
                     </span>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusStyles[employeeData.status] ?? "bg-gray-100 text-ink-soft"}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusStyles[employee.employment_status] ?? "bg-gray-100 text-ink-soft"}`}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {employeeData.status}
+                      {employee.employment_status}
                     </span>
                   </div>
                 </div>
@@ -380,88 +246,21 @@ export const ViewEmployee = memo(function ViewEmployee({
                     />
 
                     <InfoSection title="Personal Details">
-                      <InfoField
-                        icon={UserCircle}
-                        label="First Name"
-                        value={employeeData.firstName}
-                      />
-                      <InfoField
-                        icon={UserCircle}
-                        label="Last Name"
-                        value={employeeData.lastName}
-                      />
-                      <InfoField
-                        icon={Mail}
-                        label="Email"
-                        value={employeeData.personalEmail}
-                      />
-                      <InfoField
-                        icon={Phone}
-                        label="Phone Number"
-                        value={employeeData.phone}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Date of Birth"
-                        value={employeeData.dateOfBirth}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Gender"
-                        value={employeeData.gender}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Marital Status"
-                        value={employeeData.maritalStatus}
-                      />
-                      <InfoField
-                        icon={Phone}
-                        label="Alternate Phone"
-                        value={employeeData.alternatePhone}
-                      />
+                      <InfoField icon={UserCircle} label="First Name" value={employee.first_name} />
+                      <InfoField icon={UserCircle} label="Last Name" value={employee.last_name} />
+                      <InfoField icon={Mail} label="Email" value={employee.email} />
+                      <InfoField icon={Phone} label="Phone Number" value={employee.phone} />
+                      <InfoField icon={Calendar} label="Date of Birth" value={formatDate(employee.date_of_birth)} />
+                      <InfoField icon={User} label="Gender" value={employee.gender} />
+                      <InfoField icon={User} label="Marital Status" value={employee.marital_status} />
+                      <InfoField icon={Phone} label="Alternate Phone" value={employee.alternate_phone} />
                     </InfoSection>
 
-                    <InfoSection title="Address">
-                      <InfoField
-                        icon={MapPin}
-                        label="Current Address"
-                        value={`${employeeData.currentAddress.line1}, ${employeeData.currentAddress.line2}, ${employeeData.currentAddress.city}, ${employeeData.currentAddress.state}, ${employeeData.currentAddress.country} - ${employeeData.currentAddress.postalCode}`}
-                      />
-                      <InfoField
-                        icon={MapPin}
-                        label="Permanent Address"
-                        value={`${employeeData.permanentAddress.line1}, ${employeeData.permanentAddress.line2}, ${employeeData.permanentAddress.city}, ${employeeData.permanentAddress.state}, ${employeeData.permanentAddress.country} - ${employeeData.permanentAddress.postalCode}`}
-                      />
-                    </InfoSection>
-
-                    <InfoSection title="Emergency Contact">
-                      <InfoField
-                        icon={User}
-                        label="Contact Name"
-                        value={employeeData.emergencyContact.name}
-                      />
-                      <InfoField
-                        icon={Phone}
-                        label="Phone Number"
-                        value={employeeData.emergencyContact.phone}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Relationship"
-                        value={employeeData.emergencyContact.relationship}
-                      />
-                      <InfoField
-                        icon={Phone}
-                        label="Alternate Phone"
-                        value={employeeData.emergencyContact.alternatePhone}
-                      />
-                      <InfoField
-                        icon={MapPin}
-                        label="Address"
-                        value={employeeData.emergencyContact.address}
-                      />
-                    </InfoSection>
+                    {employee.address && (
+                      <InfoSection title="Address">
+                        <InfoField icon={Hash} label="Address" value={employee.address} />
+                      </InfoSection>
+                    )}
                   </Panel>
                 )}
 
@@ -470,117 +269,38 @@ export const ViewEmployee = memo(function ViewEmployee({
                     <SectionHeader
                       icon={Briefcase}
                       title="Employment Information"
-                      description="Job, department and work contact details"
+                      description="Job and department details"
                     />
 
                     <InfoSection title="Job Details">
-                      <InfoField
-                        icon={Hash}
-                        label="Employee ID"
-                        value={employeeData.employeeId}
-                      />
-                      <InfoField
-                        icon={Briefcase}
-                        label="Employment Type"
-                        value={employeeData.employmentType}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Joining Date"
-                        value={employeeData.joiningDate}
-                      />
+                      <InfoField icon={Hash} label="Employee Code" value={employee.employee_code} />
+                      <InfoField icon={Briefcase} label="Employment Type" value={employee.employment_type} />
+                      <InfoField icon={Calendar} label="Joining Date" value={formatDate(employee.joining_date)} />
                       <InfoField
                         icon={Calendar}
                         label="Probation End Date"
-                        value={employeeData.probationEndDate}
+                        value={formatDate(employee.probation_end_date)}
                       />
-                      <InfoField
-                        icon={Building}
-                        label="Department"
-                        value={employeeData.teamDepartment}
-                      />
-                      <InfoField
-                        icon={Briefcase}
-                        label="Designation"
-                        value={employeeData.designation}
-                      />
-                      <InfoField
-                        icon={MapPin}
-                        label="Work Location"
-                        value={employeeData.workLocation}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Reporting Manager"
-                        value={employeeData.reportingManager}
-                      />
-                      <InfoField
-                        icon={Award}
-                        label="Employment Level"
-                        value={employeeData.employmentLevel}
-                      />
-                      <InfoField
-                        icon={Briefcase}
-                        label="Work Mode"
-                        value={employeeData.workModeDetailed}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Shift Schedule"
-                        value={employeeData.shiftSchedule}
-                      />
+                      <InfoField icon={Building} label="Department" value={employee.department?.name} />
+                      <InfoField icon={Briefcase} label="Designation" value={employee.designation?.name} />
+                      <InfoField icon={Briefcase} label="Work Mode" value={employee.work_mode} />
+                      <InfoField icon={Briefcase} label="Employment Level" value={employee.employment_level} />
+                      <InfoField icon={Phone} label="Work Phone" value={employee.work_phone} />
+                      <InfoField icon={User} label="Lifecycle" value={employee.lifecycle} />
                     </InfoSection>
 
-                    <InfoSection title="Work Contact & Access">
-                      <InfoField
-                        icon={Mail}
-                        label="Work Email"
-                        value={employeeData.workEmail}
-                      />
-                      <InfoField
-                        icon={Phone}
-                        label="Work Phone"
-                        value={employeeData.workPhone}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Username"
-                        value={employeeData.username}
-                      />
-                      <InfoField
-                        icon={Shield}
-                        label="Access Level"
-                        value={employeeData.accessLevel}
-                      />
-                    </InfoSection>
-
-                    <InfoSection title="Skills & Qualifications">
-                      <InfoField
-                        icon={Award}
-                        label="Highest Qualification"
-                        value={employeeData.highestQualification}
-                      />
-                      <InfoField
-                        icon={Building}
-                        label="University"
-                        value={employeeData.university}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Years of Experience"
-                        value={employeeData.yearsOfExperience}
-                      />
-                      <InfoField
-                        icon={Briefcase}
-                        label="Previous Company"
-                        value={employeeData.previousCompany}
-                      />
-                      <InfoField
-                        icon={Languages}
-                        label="Languages"
-                        value={employeeData.languages.join(", ")}
-                      />
-                    </InfoSection>
+                    {employee.user && (
+                      <InfoSection title="Account">
+                        <InfoField icon={Mail} label="Login Email" value={employee.user.email} />
+                        <InfoField icon={User} label="Username" value={employee.user.username} />
+                        <InfoField icon={Briefcase} label="Role" value={employee.user.role?.name} />
+                        <InfoField
+                          icon={CheckCircle}
+                          label="Account Active"
+                          value={employee.user.is_active ? "Yes" : "No"}
+                        />
+                      </InfoSection>
+                    )}
                   </Panel>
                 )}
 
@@ -591,92 +311,7 @@ export const ViewEmployee = memo(function ViewEmployee({
                       title="Financial Information"
                       description="Compensation, bank and payroll details"
                     />
-
-                    <InfoSection title="Compensation">
-                      <InfoField
-                        icon={Wallet}
-                        label="Salary Type"
-                        value={employeeData.salaryType}
-                      />
-                      <InfoField
-                        icon={Wallet}
-                        label="Annual CTC"
-                        value={employeeData.annualCTC}
-                      />
-                      <InfoField
-                        icon={Wallet}
-                        label="Basic Salary"
-                        value={employeeData.basicSalary}
-                      />
-                      <InfoField
-                        icon={Wallet}
-                        label="HRA"
-                        value={employeeData.hra}
-                      />
-                      <InfoField
-                        icon={Wallet}
-                        label="Other Allowances"
-                        value={employeeData.otherAllowances}
-                      />
-                      <InfoField
-                        icon={Wallet}
-                        label="Bonus"
-                        value={employeeData.bonus}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Pay Frequency"
-                        value={employeeData.payFrequency}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Effective From"
-                        value={employeeData.effectiveFrom}
-                      />
-                    </InfoSection>
-
-                    <InfoSection title="Bank & Payroll">
-                      <InfoField
-                        icon={Building}
-                        label="Bank Name"
-                        value={employeeData.bankName}
-                      />
-                      <InfoField
-                        icon={User}
-                        label="Account Holder"
-                        value={employeeData.accountHolderName}
-                      />
-                      <InfoField
-                        icon={Hash}
-                        label="Account Number"
-                        value={employeeData.accountNumber}
-                      />
-                      <InfoField
-                        icon={Hash}
-                        label="IFSC Code"
-                        value={employeeData.ifscCode}
-                      />
-                      <InfoField
-                        icon={Building}
-                        label="Account Type"
-                        value={employeeData.accountType}
-                      />
-                      <InfoField
-                        icon={Hash}
-                        label="PAN Number"
-                        value={employeeData.panNumber}
-                      />
-                      <InfoField
-                        icon={Hash}
-                        label="UAN"
-                        value={employeeData.uan}
-                      />
-                      <InfoField
-                        icon={Hash}
-                        label="PF Number"
-                        value={employeeData.pfNumber}
-                      />
-                    </InfoSection>
+                    <NotAvailableNotice what="Compensation and bank detail records" />
                   </Panel>
                 )}
 
@@ -685,69 +320,12 @@ export const ViewEmployee = memo(function ViewEmployee({
                     <SectionHeader
                       icon={FolderOpen}
                       title="Documents"
-                      description="Upload and manage employee documents"
+                      description="Employee identification and employment documents"
                     />
-
-                    <div className="mb-6 pb-2 border-b border-border/60">
-                      <p className="text-sm font-medium text-ink mb-1">
-                        Employee Documents
-                      </p>
-                      <p className="text-sm text-muted">
-                        Upload and manage employee identification, employment
-                        and educational documents.
-                      </p>
-                    </div>
-
-                    {employeeData.documents.length > 0 ? (
-                      <div className="space-y-3">
-                        {employeeData.documents.map((doc, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3.5 bg-surface-muted rounded-xl border border-border hover:bg-gray-100/50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary shrink-0">
-                                <FileText className="h-4 w-4" />
-                              </span>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-ink truncate">
-                                  {doc.name}
-                                </p>
-                                <p className="text-xs text-muted">
-                                  {doc.type} • {doc.size}
-                                </p>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-primary hover:text-primary-dark shrink-0"
-                            >
-                              View
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12 bg-surface-muted rounded-xl border border-border">
-                        <FolderOpen className="h-12 w-12 text-muted mx-auto mb-3" />
-                        <p className="text-ink font-medium mb-1">
-                          No documents added
-                        </p>
-                        <p className="text-sm text-muted">
-                          Add the employee's identification and employment
-                          documents.
-                        </p>
-                        <Button className="mt-4">
-                          <FileText className="h-4 w-4 mr-2" />
-                          Add Document
-                        </Button>
-                      </div>
-                    )}
+                    <NotAvailableNotice what="Document records" />
                   </Panel>
                 )}
 
-                {/* Onboarding Tab */}
                 {activeTab === "onboarding" && (
                   <Panel>
                     <SectionHeader
@@ -755,77 +333,7 @@ export const ViewEmployee = memo(function ViewEmployee({
                       title="Onboarding & Attendance"
                       description="Onboarding tasks, leave and attendance policies"
                     />
-
-                    <InfoSection title="Onboarding">
-                      <InfoField
-                        icon={CheckCircle}
-                        label="Onboarding Status"
-                        value={employeeData.onboardingStatus}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Start Date"
-                        value={employeeData.onboardingStartDate}
-                      />
-                      <InfoField
-                        icon={FileText}
-                        label="Checklist"
-                        value={employeeData.onboardingChecklist}
-                      />
-                      <InfoField
-                        icon={Users}
-                        label="Assigned Buddy"
-                        value={employeeData.assignedBuddy}
-                      />
-                      <InfoField
-                        icon={Briefcase}
-                        label="Equipment Required"
-                        value={employeeData.equipmentRequired}
-                      />
-                      <InfoField
-                        icon={FileText}
-                        label="HR Notes"
-                        value={employeeData.hrNotes}
-                      />
-                    </InfoSection>
-
-                    <InfoSection title="Leave & Attendance">
-                      <InfoField
-                        icon={Clock}
-                        label="Leave Policy"
-                        value={employeeData.leavePolicy}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Work Schedule"
-                        value={employeeData.workSchedule}
-                      />
-                      <InfoField
-                        icon={Calendar}
-                        label="Weekly Off"
-                        value={employeeData.weeklyOff}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Overtime Policy"
-                        value={employeeData.overtimePolicy}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Attendance Policy"
-                        value={employeeData.attendancePolicy}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Shift"
-                        value={employeeData.shift}
-                      />
-                      <InfoField
-                        icon={Clock}
-                        label="Late Policy"
-                        value={employeeData.latePolicy}
-                      />
-                    </InfoSection>
+                    <NotAvailableNotice what="Onboarding and leave/attendance policy assignments" />
                   </Panel>
                 )}
               </div>
@@ -834,21 +342,15 @@ export const ViewEmployee = memo(function ViewEmployee({
 
           <div className="shrink-0 bg-surface border-t border-border px-6 py-4 flex justify-between items-center">
             <p className="text-xs text-muted">
-              Employee ID: {employeeData.employeeId}
+              {employee ? `Employee Code: ${employee.employee_code}` : ""}
             </p>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                Close
-              </Button>
-            </div>
+            <Button variant="outline" onClick={() => setIsOpen(false)} className="flex items-center gap-2">
+              <X className="h-4 w-4" />
+              Close
+            </Button>
           </div>
         </div>
       </DrawerContent>
     </Drawer>
   );
-});
+}

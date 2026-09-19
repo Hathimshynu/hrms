@@ -115,6 +115,8 @@ const STATUS_STYLES: Record<string, string> = {
   "half day": "bg-orange-100 text-orange-700",
   "on leave": "bg-purple-100 text-purple-700",
   "work from home": "bg-blue-100 text-blue-700",
+  holiday: "bg-pink-100 text-pink-700",
+  "week off": "bg-slate-100 text-slate-700",
   pending: "bg-yellow-100 text-yellow-700",
   approved: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
@@ -143,6 +145,9 @@ export function Avatar({ src, name }: { src?: string; name: string }) {
     .toUpperCase();
   if (src) {
     return (
+      // Employee photo URLs come from the backend at runtime (arbitrary
+      // origin), so next/image's remotePatterns can't be configured for them.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={name}
@@ -289,7 +294,6 @@ export function DataTable<T>({
   pageSize = 10,
   onAdd,
   addName = "Add New",
-  onExport,
   isLoading = false,
   emptyMessage = "No results found.",
   onViewRow,
@@ -297,7 +301,6 @@ export function DataTable<T>({
   onDeleteRow,
   actionColumnHeader = "Actions",
   enableColumnVisibility = true,
-  enableExport = true,
   enableFilter = true,
   enableSearch = true,
 }: DataTableProps<T>) {
@@ -346,7 +349,7 @@ export function DataTable<T>({
       const q = search.toLowerCase();
       result = result.filter((row) =>
         searchKeys.some((k) =>
-          String((row as any)[k] ?? "")
+          String((row as unknown as Record<string, unknown>)[k as string] ?? "")
             .toLowerCase()
             .includes(q),
         ),
@@ -356,7 +359,7 @@ export function DataTable<T>({
     for (const [key, selectedValues] of activeFilters) {
       if (selectedValues.size > 0) {
         result = result.filter((row) => {
-          const value = String((row as any)[key] ?? "");
+          const value = String((row as unknown as Record<string, unknown>)[key] ?? "");
           return selectedValues.has(value);
         });
       }
@@ -369,10 +372,10 @@ export function DataTable<T>({
     if (!sortKey || !sortDir) return filtered;
     const col = columns.find((c) => c.key === sortKey);
     if (!col) return filtered;
-    const getVal = col.sortValue ?? ((r: T) => (r as any)[sortKey]);
+    const getVal = col.sortValue ?? ((r: T) => (r as unknown as Record<string, string | number>)[sortKey]);
     return [...filtered].sort((a, b) => {
-      const av = getVal(a) as any;
-      const bv = getVal(b) as any;
+      const av = getVal(a);
+      const bv = getVal(b);
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
@@ -405,7 +408,8 @@ export function DataTable<T>({
 
   function toggleRow(id: string | number) {
     const next = new Set(selected);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     setSelected(next);
   }
 
@@ -427,14 +431,6 @@ export function DataTable<T>({
         current.add(value);
       }
       next.set(key, current);
-      return next;
-    });
-  }
-
-  function clearFilter(key: string) {
-    setActiveFilters((prev) => {
-      const next = new Map(prev);
-      next.set(key, new Set());
       return next;
     });
   }
@@ -463,6 +459,7 @@ export function DataTable<T>({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder ?? "Search"}
                 // className="w-full h-12 cursor-text rounded-full border border-border bg-[#F2F2F2] py-2.5 pl-10 pr-4 text-sm text-ink placeholder:text-muted outline-none transition-all duration-200 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </div>
@@ -572,9 +569,8 @@ export function DataTable<T>({
                         onClick={() => {
                           setHiddenCols((prev) => {
                             const next = new Set(prev);
-                            next.has(col.key)
-                              ? next.delete(col.key)
-                              : next.add(col.key);
+                            if (next.has(col.key)) next.delete(col.key);
+                            else next.add(col.key);
                             return next;
                           });
                         }}
@@ -697,18 +693,20 @@ export function DataTable<T>({
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={
-                      visibleColumns.length +
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-b border-border" aria-hidden="true">
+                    <td
+                      colSpan={
+                        visibleColumns.length +
                       (selectable ? 1 : 0) +
                       (hasRowActions ? 1 : 0)
-                    }
-                    className="px-3 py-10 text-center text-muted"
-                  >
-                    Loading…
-                  </td>
-                </tr>
+                      }
+                      className="px-4 py-4"
+                    >
+                      <div className="h-5 w-full animate-pulse rounded-md bg-black/5" />
+                    </td>
+                  </tr>
+                ))
               ) : pageRows.length === 0 ? (
                 <tr>
                   <td
@@ -717,9 +715,13 @@ export function DataTable<T>({
                       (selectable ? 1 : 0) +
                       (hasRowActions ? 1 : 0)
                     }
-                    className="px-3 py-10 text-center text-muted"
+                    className="px-3 py-16 text-center"
                   >
-                    {emptyMessage}
+                    <span className="mx-auto mb-3 flex size-11 items-center justify-center rounded-full bg-primary-soft text-primary-dark">
+                      <Search className="size-5" />
+                    </span>
+                    <span className="block text-sm font-semibold text-ink">{emptyMessage}</span>
+                    <span className="mt-1 block text-xs text-muted">Try adjusting your search or filters.</span>
                   </td>
                 </tr>
               ) : (
@@ -742,7 +744,7 @@ export function DataTable<T>({
                           />
                         </td>
                       )}
-                      {visibleColumns.map((col, i) => (
+                      {visibleColumns.map((col) => (
                         <td
                           key={col.key}
                           className={`px-4 py-3.5 align-middle text-sm leading-snug text-ink ${
@@ -751,7 +753,7 @@ export function DataTable<T>({
                         >
                           {col.accessor
                             ? col.accessor(row)
-                            : (row as any)[col.key]}
+                            : (row as unknown as Record<string, React.ReactNode>)[col.key]}
                         </td>
                       ))}
                       {hasRowActions && (

@@ -96,8 +96,21 @@ class AttendanceRegularizationController extends Controller
         ]);
     }
 
-    public function show(AttendanceRegularization $attendanceRegularization)
+    public function show(Request $request, AttendanceRegularization $attendanceRegularization)
     {
+        // Same route/permission (`view attendance`) is shared with the
+        // self-service index above, so this had no ownership check at all -
+        // any employee could view any other employee's regularization
+        // (reason/description) by id. Mirrors the ownership check cancel()
+        // already does; HR/admins (edit attendance) can view any record.
+        $user = $request->user('api');
+        $employee = Employee::where('user_id', $user->id)->first();
+        $isOwner = $employee && $attendanceRegularization->employee_id === $employee->id;
+
+        if (!$isOwner && !$user->can('edit attendance')) {
+            abort(403, 'You cannot view this regularization.');
+        }
+
         $attendanceRegularization->load([
             'employee',
             'attendance',

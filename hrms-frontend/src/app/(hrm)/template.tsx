@@ -1,19 +1,9 @@
-"use client";
-
-import { PageTransition } from "@/src/components/layout/PageTransition";
-import { AnimatePresence } from "framer-motion";
-import { usePathname } from "next/navigation";
-
+// Server component: a CSS-only enter fade. No exit animation and no
+// AnimatePresence, so navigation is never blocked waiting on an animation.
 export default function DashboardTemplate({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-
-  return (
-    <AnimatePresence mode="wait">
-      <PageTransition key={pathname}>{children}</PageTransition>
-    </AnimatePresence>
-  );
+  return <div className="page-enter min-h-full">{children}</div>;
 }

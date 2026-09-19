@@ -1,7 +1,13 @@
 // src/app/layout.tsx
 import { cn } from "@/src/lib/utils/utils";
+import type { Metadata } from "next";
 import { Geist, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "HATHIM HRMS",
+  description: "HATHIM HRMS",
+};
 
 const geist = Geist({
   subsets: ["latin"],

@@ -1,6 +1,7 @@
 "use client";
 
 import { DeleteAlert } from "@/src/components/common/ReusableAlert";
+import { InlineBanner } from "@/src/components/common/InlineBanner";
 import {
   Column,
   DataTable,
@@ -9,109 +10,26 @@ import {
 } from "@/src/components/ui/Datatable";
 import { ArrowLeft, Plus, Upload } from "lucide-react";
 import * as React from "react";
+import { useEffect, useState } from "react";
 import { AddDesignation } from "../components/AddDesignation";
 
-interface Designation {
-  id: string;
-  name: string;
-  code: string;
-  department: string;
-  employeeCount: number;
-  status: "Active" | "Inactive" | "Under Review";
-  level: "Entry" | "Mid" | "Senior" | "Lead" | "Manager";
-}
+import { usePermission } from "@/src/hooks/usePermission";
+import { departmentService, type DepartmentDto } from "@/src/lib/departments/department.service";
+import { parseApiError } from "@/src/lib/api/errors";
+import {
+  designationService,
+  type DesignationDto,
+  type DesignationPayload,
+} from "@/src/lib/designations/designation.service";
+import { MENU_MODULES } from "@/src/permissions/permissions";
 
-const initialDesignations: Designation[] = [
-  {
-    id: "1",
-    name: "Software Engineer",
-    code: "SE",
-    department: "Information Technology",
-    employeeCount: 15,
-    status: "Active",
-    level: "Mid",
-  },
-  {
-    id: "2",
-    name: "Senior Software Engineer",
-    code: "SSE",
-    department: "Information Technology",
-    employeeCount: 8,
-    status: "Active",
-    level: "Senior",
-  },
-  {
-    id: "3",
-    name: "HR Executive",
-    code: "HRE",
-    department: "Human Resources",
-    employeeCount: 10,
-    status: "Active",
-    level: "Entry",
-  },
-  {
-    id: "4",
-    name: "HR Manager",
-    code: "HRM",
-    department: "Human Resources",
-    employeeCount: 4,
-    status: "Active",
-    level: "Manager",
-  },
-  {
-    id: "5",
-    name: "Business Development Executive",
-    code: "BDE",
-    department: "Business Development",
-    employeeCount: 12,
-    status: "Active",
-    level: "Entry",
-  },
-  {
-    id: "6",
-    name: "Business Development Manager",
-    code: "BDM",
-    department: "Business Development",
-    employeeCount: 6,
-    status: "Active",
-    level: "Manager",
-  },
-  {
-    id: "7",
-    name: "Medical Officer",
-    code: "MO",
-    department: "Medical Department",
-    employeeCount: 8,
-    status: "Active",
-    level: "Senior",
-  },
-  {
-    id: "8",
-    name: "BPO Executive",
-    code: "BPOE",
-    department: "BPO",
-    employeeCount: 20,
-    status: "Active",
-    level: "Entry",
-  },
-  {
-    id: "9",
-    name: "BPO Team Lead",
-    code: "BPOTL",
-    department: "BPO",
-    employeeCount: 5,
-    status: "Active",
-    level: "Lead",
-  },
-];
-
-const STATUS_ORDER: Record<Designation["status"], number> = {
+const STATUS_ORDER: Record<DesignationDto["status"], number> = {
   Active: 1,
   "Under Review": 2,
   Inactive: 3,
 };
 
-const columns: Column<Designation>[] = [
+const columns: Column<DesignationDto>[] = [
   {
     key: "name",
     header: "Designation",
@@ -135,17 +53,15 @@ const columns: Column<Designation>[] = [
     key: "department",
     header: "Department",
     accessor: (row) => (
-      <span className="text-sm text-stone-700">{row.department}</span>
+      <span className="text-sm text-stone-700">{row.department?.name ?? "—"}</span>
     ),
-    sortValue: (row) => row.department,
+    sortValue: (row) => row.department?.name ?? "",
   },
   {
-    key: "employeeCount",
-    header: "Employees",
-    accessor: (row) => (
-      <span className="font-semibold text-stone-700">{row.employeeCount}</span>
-    ),
-    sortValue: (row) => row.employeeCount,
+    key: "level",
+    header: "Level",
+    accessor: (row) => <span className="text-sm text-stone-700">{row.level}</span>,
+    sortValue: (row) => row.level,
   },
   {
     key: "status",
@@ -175,22 +91,61 @@ function useMultiFilter<T>(data: T[], getValue: (row: T) => string) {
 }
 
 export default function DesignationPage() {
-  const [designations, setDesignations] = React.useState(initialDesignations);
-  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
-  const [editingDesignation, setEditingDesignation] =
-    React.useState<Designation | null>(null);
-  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
-  const [designationToDelete, setDesignationToDelete] =
-    React.useState<Designation | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
+  // GET /api/menus only exposes view/edit/delete per module - no "create"
+  // flag exists, so the Add button is left ungated (see phase report).
+  const { edit: canEdit, delete: canDelete } = usePermission(MENU_MODULES.DESIGNATIONS);
 
-  const departmentFilter = useMultiFilter(designations, (d) => d.department);
+  const [designations, setDesignations] = useState<DesignationDto[]>([]);
+  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  const [editingDesignation, setEditingDesignation] = React.useState<DesignationDto | null>(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveFormError, setSaveFormError] = React.useState<string | null>(null);
+  const [saveFieldErrors, setSaveFieldErrors] = React.useState<Record<string, string>>({});
+
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
+  const [designationToDelete, setDesignationToDelete] = React.useState<DesignationDto | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const departmentFilter = useMultiFilter(designations, (d) => d.department?.name ?? "");
   const levelFilter = useMultiFilter(designations, (d) => d.level);
   const statusFilter = useMultiFilter(designations, (d) => d.status);
-  const uniqueDepartments = React.useMemo(
-    () => Array.from(new Set(designations.map((d) => d.department))),
-    [designations],
-  );
+
+  const loadData = React.useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      // Designations depend on the real Department list for the
+      // create/edit dropdown - fetched from the same verified endpoint
+      // used by the Departments page, not hardcoded.
+      const [designationData, departmentData] = await Promise.all([
+        designationService.list(),
+        departmentService.list(),
+      ]);
+      setDesignations(designationData);
+      setDepartments(departmentData);
+    } catch (err) {
+      setLoadError(parseApiError(err, "Failed to load designations.").message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   const filteredData = React.useMemo(
     () =>
@@ -207,69 +162,75 @@ export default function DesignationPage() {
 
   const handleAdd = () => {
     setEditingDesignation(null);
+    setSaveFormError(null);
+    setSaveFieldErrors({});
     setIsAddDialogOpen(true);
   };
 
-  const handleEdit = (designation: Designation) => {
+  const handleEdit = (designation: DesignationDto) => {
     setEditingDesignation(designation);
+    setSaveFormError(null);
+    setSaveFieldErrors({});
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (designation: Designation) => {
+  const handleDelete = (designation: DesignationDto) => {
     setDesignationToDelete(designation);
+    setDeleteError(null);
     setIsDeleteAlertOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!designationToDelete) return;
 
     setIsDeleting(true);
-    setTimeout(() => {
-      setDesignations((prev) =>
-        prev.filter((d) => d.id !== designationToDelete.id),
-      );
-      setIsDeleting(false);
+    setDeleteError(null);
+    try {
+      await designationService.remove(designationToDelete.id);
+      setSuccessMessage("Designation deleted successfully.");
       setIsDeleteAlertOpen(false);
       setDesignationToDelete(null);
-    }, 1500);
+      await loadData();
+    } catch (err) {
+      // Dependency-protection (409) and other backend errors are shown
+      // in place, not silently bypassed.
+      setDeleteError(parseApiError(err, "Failed to delete designation.").message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleCancelDelete = () => {
     setIsDeleteAlertOpen(false);
     setDesignationToDelete(null);
+    setDeleteError(null);
   };
 
-  const handleSave = (data: Omit<Designation, "id"> & { id?: string }) => {
-    if (data.id) {
-      setDesignations((prev) =>
-        prev.map((d) =>
-          d.id === data.id
-            ? {
-                ...d,
-                name: data.name,
-                code: data.code,
-                department: data.department,
-                employeeCount: data.employeeCount,
-                status: data.status,
-                level: data.level,
-              }
-            : d,
-        ),
-      );
-    } else {
-      // Add mode
-      const newDesignation: Designation = {
-        id: String(Date.now()),
-        name: data.name,
-        code: data.code,
-        department: data.department,
-        employeeCount: data.employeeCount,
-        status: data.status,
-        level: data.level,
-      };
-      setDesignations((prev) => [...prev, newDesignation]);
+  const handleSave = async (payload: DesignationPayload) => {
+    setIsSaving(true);
+    setSaveFormError(null);
+    setSaveFieldErrors({});
+    try {
+      if (editingDesignation) {
+        await designationService.update(editingDesignation.id, payload);
+        setSuccessMessage("Designation updated successfully.");
+      } else {
+        await designationService.create(payload);
+        setSuccessMessage("Designation created successfully.");
+      }
+      setIsAddDialogOpen(false);
+      setEditingDesignation(null);
+      await loadData();
+    } catch (err) {
+      const { message, fieldErrors } = parseApiError(err, "Failed to save designation.");
+      if (Object.keys(fieldErrors).length > 0) {
+        setSaveFieldErrors(fieldErrors);
+      } else {
+        setSaveFormError(message);
+      }
+    } finally {
+      setIsSaving(false);
     }
-    setIsAddDialogOpen(false);
   };
 
   return (
@@ -277,15 +238,15 @@ export default function DesignationPage() {
       <div className="sticky top-0 z-50 bg-[#F2F2F2] py-4 px-3 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex gap-3 items-center min-w-0">
-            <div
+            <button type="button" aria-label="Go back"
               className="group flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-primary sm:h-10 sm:w-10"
               onClick={() => window.history.back()}
             >
               <ArrowLeft className="h-5 w-5 text-black group-hover:text-white" />
-            </div>
-            <div className="text-lg sm:text-2xl font-light truncate">
+            </button>
+            <h1 className="text-lg sm:text-2xl font-light truncate">
               Designation Management
-            </div>
+            </h1>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -308,12 +269,15 @@ export default function DesignationPage() {
         </div>
       </div>
 
-      <div className="w-full px-3 sm:px-6 lg:px-8 py-4">
+      <div className="w-full px-3 sm:px-6 lg:px-8 py-4 grid gap-4">
+        {successMessage && <InlineBanner type="success" message={successMessage} />}
+        {loadError && <InlineBanner type="error" message={loadError} />}
+
         <DataTable
           data={filteredData}
           columns={columns}
-          keyExtractor={(row: { id: any }) => row.id}
-          searchKeys={["name", "code", "department"]}
+          keyExtractor={(row) => row.id}
+          searchKeys={["name", "code"]}
           filtersSlot={
             <>
               <FilterPill
@@ -333,18 +297,25 @@ export default function DesignationPage() {
             </>
           }
           pageSize={10}
-          onExport={(rows: any) => console.log("export", rows)}
-          onEditRow={handleEdit}
-          onDeleteRow={handleDelete}
+          isLoading={isLoading}
+          emptyMessage="No designations found."
+          onEditRow={canEdit ? handleEdit : undefined}
+          onDeleteRow={canDelete ? handleDelete : undefined}
         />
       </div>
 
       <AddDesignation
         open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
+        onOpenChange={(open) => {
+          setIsAddDialogOpen(open);
+          if (!open) setEditingDesignation(null);
+        }}
         onSave={handleSave}
         designation={editingDesignation}
-        departments={uniqueDepartments}
+        departments={departments}
+        isSaving={isSaving}
+        serverErrors={saveFieldErrors}
+        formError={saveFormError}
       />
 
       <DeleteAlert
@@ -353,10 +324,14 @@ export default function DesignationPage() {
           if (!open && !isDeleting) {
             setIsDeleteAlertOpen(false);
             setDesignationToDelete(null);
+            setDeleteError(null);
           }
         }}
         title="Delete Designation"
-        description={`Are you sure you want to delete "${designationToDelete?.name || "Designation"}"? This action cannot be undone.`}
+        description={
+          deleteError ||
+          `Are you sure you want to delete "${designationToDelete?.name || "Designation"}"? This action cannot be undone.`
+        }
         confirmText={isDeleting ? "Deleting..." : "Delete"}
         cancelText="Cancel"
         onConfirm={handleConfirmDelete}

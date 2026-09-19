@@ -10,14 +10,13 @@ import { Button } from "@/src/components/ui/Button";
 import { FormCheckbox } from "@/src/components/ui/FormCheckbox";
 import { Input } from "@/src/components/ui/Input";
 import { useAuth } from "@/src/hooks/useAuth";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
+import { GoogleSignIn } from "./GoogleSignIn";
 
 export function LoginForm() {
   const { login, isLoading, error } = useAuth();
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,12 +36,10 @@ export function LoginForm() {
       setFieldError("Password must be at least 6 characters");
       return;
     }
-    router.push("/dashboard");
 
     try {
-      // await login({ email, password });
-      // Redirect to dashboard on successful login
-      router.push("/dashboard");
+      await login({ email, password, remember_me: rememberMe });
+      // navigation to /dashboard or /change-password happens inside useAuth
     } catch {
       // error already surfaced via the store
     }
@@ -103,9 +100,11 @@ export function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="text-xs font-semibold text-gray-500 hover:text-black transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="rounded-full p-1 text-gray-500 transition-colors hover:text-black focus-visible:outline-2 focus-visible:outline-primary"
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
                 </button>
               }
             />
@@ -151,37 +150,7 @@ export function LoginForm() {
           </StaggerItem>
 
           <StaggerItem>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex items-center justify-center gap-2 p-2 h-11 border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Image
-                  src="/images/google_icon.png"
-                  alt="Google"
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 rounded-full object-contain"
-                />
-                <span>Google</span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="flex items-center justify-center gap-2 p-2 h-11 border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Image
-                  src="/images/microsoft_icon.png"
-                  alt="Microsoft"
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 rounded-full object-contain"
-                />
-                <span>Microsoft</span>
-              </Button>
-            </div>
+            <GoogleSignIn rememberMe={rememberMe} />
           </StaggerItem>
         </StaggerContainer>
       </form>

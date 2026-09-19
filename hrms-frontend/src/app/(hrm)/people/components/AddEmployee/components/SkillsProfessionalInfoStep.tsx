@@ -2,144 +2,109 @@
 
 import { Input } from "@/src/components/ui/Input";
 import { Select } from "@/src/components/ui/Select";
+import type { ProfessionalValues, StepProps } from "../onboarding-form.types";
 
 const highestQualifications = [
-  { label: "High School", value: "high_school" },
-  { label: "Diploma", value: "diploma" },
-  { label: "Bachelor's Degree", value: "bachelors_degree" },
-  { label: "Master's Degree", value: "masters_degree" },
-  { label: "Doctorate / PhD", value: "doctorate" },
-  { label: "Other", value: "other" },
-];
-
-const certifications = [
-  {
-    label: "AWS Certified Cloud Practitioner",
-    value: "aws_cloud_practitioner",
-  },
-  {
-    label: "AWS Certified Developer",
-    value: "aws_developer",
-  },
-  {
-    label: "Microsoft Azure Fundamentals",
-    value: "azure_fundamentals",
-  },
-  {
-    label: "Google Cloud Certification",
-    value: "google_cloud",
-  },
-  {
-    label: "Oracle Certification",
-    value: "oracle",
-  },
-  {
-    label: "Certified Scrum Master",
-    value: "scrum_master",
-  },
-  {
-    label: "Other",
-    value: "other",
-  },
+  { label: "High School", value: "High School" },
+  { label: "Diploma", value: "Diploma" },
+  { label: "Bachelor's Degree", value: "Bachelor's Degree" },
+  { label: "Master's Degree", value: "Master's Degree" },
+  { label: "Doctorate / PhD", value: "Doctorate / PhD" },
+  { label: "Other", value: "Other" },
 ];
 
 const languages = [
-  { label: "English", value: "english" },
-  { label: "Tamil", value: "tamil" },
-  { label: "Hindi", value: "hindi" },
-  { label: "Malayalam", value: "malayalam" },
-  { label: "Telugu", value: "telugu" },
-  { label: "Kannada", value: "kannada" },
-  { label: "Bengali", value: "bengali" },
-  { label: "Marathi", value: "marathi" },
-  { label: "Other", value: "other" },
+  { label: "English", value: "English" },
+  { label: "Tamil", value: "Tamil" },
+  { label: "Hindi", value: "Hindi" },
+  { label: "Malayalam", value: "Malayalam" },
+  { label: "Telugu", value: "Telugu" },
+  { label: "Kannada", value: "Kannada" },
+  { label: "Bengali", value: "Bengali" },
+  { label: "Marathi", value: "Marathi" },
 ];
 
-export function SkillsProfessionalInfoStep() {
+export function SkillsProfessionalInfoStep({
+  values,
+  onChange,
+  errors,
+}: StepProps<ProfessionalValues>) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="highestQualification"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="highestQualification" className="text-sm font-medium text-gray-700">
             Highest Qualification
           </label>
-
           <Select
             id="highestQualification"
-            name="highestQualification"
             placeholder="Select highest qualification"
             options={highestQualifications}
+            value={values.highest_qualification}
+            clearable
+            onChange={(v) => onChange({ highest_qualification: v as string })}
+            error={errors.highest_qualification}
           />
         </div>
 
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="university"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="university" className="text-sm font-medium text-gray-700">
             University / Institution
           </label>
-
           <Input
             id="university"
-            name="university"
             placeholder="Enter university or institution"
+            value={values.university_institution}
+            onChange={(e) => onChange({ university_institution: e.target.value })}
+            error={errors.university_institution}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="yearsOfExperience"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="yearsOfExperience" className="text-sm font-medium text-gray-700">
             Years of Experience
           </label>
-
           <Input
             id="yearsOfExperience"
-            name="yearsOfExperience"
             type="number"
             min="0"
             step="0.1"
             placeholder="Enter years of experience"
+            value={values.years_of_experience}
+            onChange={(e) => onChange({ years_of_experience: e.target.value })}
+            error={errors.years_of_experience}
           />
         </div>
 
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="previousCompany"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="previousCompany" className="text-sm font-medium text-gray-700">
             Previous Company
           </label>
-
           <Input
             id="previousCompany"
-            name="previousCompany"
             placeholder="Enter previous company"
+            value={values.previous_company}
+            onChange={(e) => onChange({ previous_company: e.target.value })}
+            error={errors.previous_company}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="languages"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="languages" className="text-sm font-medium text-gray-700">
             Languages
           </label>
-
           <Select
             id="languages"
-            name="languages"
             placeholder="Select languages"
             options={languages}
+            value={values.languages}
+            isMultiSelect
+            onChange={(v) => onChange({ languages: v as string[] })}
+            error={errors.languages}
           />
         </div>
       </div>

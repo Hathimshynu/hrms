@@ -184,45 +184,45 @@ Route::middleware([
 
             Route::get('/departments/{department}/designations', [EmployeeMasterController::class, 'designationsByDepartment'])->middleware('permission:create employee drafts');
 
-            Route::get('/leave-policies', [EmployeeMasterController::class, 'leavePolicies']);
-            Route::post('/leave-policies', [EmployeeMasterController::class, 'createLeavePolicy']);
-            Route::put('/leave-policies/{leavePolicy}', [EmployeeMasterController::class, 'updateLeavePolicy']);
-            Route::delete('/leave-policies/{leavePolicy}', [EmployeeMasterController::class, 'deleteLeavePolicy']);
+            Route::get('/leave-policies', [EmployeeMasterController::class, 'leavePolicies'])->middleware('permission:create employee drafts');
+            Route::post('/leave-policies', [EmployeeMasterController::class, 'createLeavePolicy'])->middleware('permission:create leave policies');
+            Route::put('/leave-policies/{leavePolicy}', [EmployeeMasterController::class, 'updateLeavePolicy'])->middleware('permission:edit leave policies');
+            Route::delete('/leave-policies/{leavePolicy}', [EmployeeMasterController::class, 'deleteLeavePolicy'])->middleware('permission:delete leave policies');
 
-            Route::get('/attendance-policies', [EmployeeMasterController::class, 'attendancePolicies']);
-            Route::post('/attendance-policies', [EmployeeMasterController::class, 'createAttendancePolicy']);
-            Route::put('/attendance-policies/{attendancePolicy}', [EmployeeMasterController::class, 'updateAttendancePolicy']);
-            Route::delete('/attendance-policies/{attendancePolicy}', [EmployeeMasterController::class, 'deleteAttendancePolicy']);
+            Route::get('/attendance-policies', [EmployeeMasterController::class, 'attendancePolicies'])->middleware('permission:create employee drafts');
+            Route::post('/attendance-policies', [EmployeeMasterController::class, 'createAttendancePolicy'])->middleware('permission:create attendance policies');
+            Route::put('/attendance-policies/{attendancePolicy}', [EmployeeMasterController::class, 'updateAttendancePolicy'])->middleware('permission:edit attendance policies');
+            Route::delete('/attendance-policies/{attendancePolicy}', [EmployeeMasterController::class, 'deleteAttendancePolicy'])->middleware('permission:delete attendance policies');
 
-            Route::get('/work-schedules', [EmployeeMasterController::class, 'workSchedules']);
-            Route::post('/work-schedules', [EmployeeMasterController::class, 'createWorkSchedule']);
-            Route::put('/work-schedules/{workSchedule}', [EmployeeMasterController::class, 'updateWorkSchedule']);
-            Route::delete('/work-schedules/{workSchedule}', [EmployeeMasterController::class, 'deleteWorkSchedule']);
+            Route::get('/work-schedules', [EmployeeMasterController::class, 'workSchedules'])->middleware('permission:create employee drafts');
+            Route::post('/work-schedules', [EmployeeMasterController::class, 'createWorkSchedule'])->middleware('permission:create work schedules');
+            Route::put('/work-schedules/{workSchedule}', [EmployeeMasterController::class, 'updateWorkSchedule'])->middleware('permission:edit work schedules');
+            Route::delete('/work-schedules/{workSchedule}', [EmployeeMasterController::class, 'deleteWorkSchedule'])->middleware('permission:delete work schedules');
 
-            Route::get('/shifts', [EmployeeMasterController::class, 'shifts']);
-            Route::post('/shifts', [EmployeeMasterController::class, 'createShift']);
-            Route::put('/shifts/{shift}', [EmployeeMasterController::class, 'updateShift']);
-            Route::delete('/shifts/{shift}', [EmployeeMasterController::class, 'deleteShift']);
+            Route::get('/shifts', [EmployeeMasterController::class, 'shifts'])->middleware('permission:create employee drafts');
+            Route::post('/shifts', [EmployeeMasterController::class, 'createShift'])->middleware('permission:create shifts');
+            Route::put('/shifts/{shift}', [EmployeeMasterController::class, 'updateShift'])->middleware('permission:edit shifts');
+            Route::delete('/shifts/{shift}', [EmployeeMasterController::class, 'deleteShift'])->middleware('permission:delete shifts');
 
-            Route::get('/weekly-offs', [EmployeeMasterController::class, 'weeklyOffs']);
-            Route::post('/weekly-offs', [EmployeeMasterController::class, 'createWeeklyOff']);
-            Route::put('/weekly-offs/{weeklyOff}', [EmployeeMasterController::class, 'updateWeeklyOff']);
-            Route::delete('/weekly-offs/{weeklyOff}', [EmployeeMasterController::class, 'deleteWeeklyOff']);
+            Route::get('/weekly-offs', [EmployeeMasterController::class, 'weeklyOffs'])->middleware('permission:create employee drafts');
+            Route::post('/weekly-offs', [EmployeeMasterController::class, 'createWeeklyOff'])->middleware('permission:create weekly offs');
+            Route::put('/weekly-offs/{weeklyOff}', [EmployeeMasterController::class, 'updateWeeklyOff'])->middleware('permission:edit weekly offs');
+            Route::delete('/weekly-offs/{weeklyOff}', [EmployeeMasterController::class, 'deleteWeeklyOff'])->middleware('permission:delete weekly offs');
 
-            Route::get('/late-policies', [EmployeeMasterController::class, 'latePolicies']);
-            Route::post('/late-policies', [EmployeeMasterController::class, 'createLatePolicy']);
-            Route::put('/late-policies/{latePolicy}', [EmployeeMasterController::class, 'updateLatePolicy']);
-            Route::delete('/late-policies/{latePolicy}', [EmployeeMasterController::class, 'deleteLatePolicy']);
+            Route::get('/late-policies', [EmployeeMasterController::class, 'latePolicies'])->middleware('permission:create employee drafts');
+            Route::post('/late-policies', [EmployeeMasterController::class, 'createLatePolicy'])->middleware('permission:create late policies');
+            Route::put('/late-policies/{latePolicy}', [EmployeeMasterController::class, 'updateLatePolicy'])->middleware('permission:edit late policies');
+            Route::delete('/late-policies/{latePolicy}', [EmployeeMasterController::class, 'deleteLatePolicy'])->middleware('permission:delete late policies');
 
-            Route::get('/overtime-policies', [EmployeeMasterController::class, 'overtimePolicies']);
-            Route::post('/overtime-policies', [EmployeeMasterController::class, 'createOvertimePolicy']);
-            Route::put('/overtime-policies/{overtimePolicy}', [EmployeeMasterController::class, 'updateOvertimePolicy']);
-            Route::delete('/overtime-policies/{overtimePolicy}', [EmployeeMasterController::class, 'deleteOvertimePolicy']);
+            Route::get('/overtime-policies', [EmployeeMasterController::class, 'overtimePolicies'])->middleware('permission:create employee drafts');
+            Route::post('/overtime-policies', [EmployeeMasterController::class, 'createOvertimePolicy'])->middleware('permission:create overtime policies');
+            Route::put('/overtime-policies/{overtimePolicy}', [EmployeeMasterController::class, 'updateOvertimePolicy'])->middleware('permission:edit overtime policies');
+            Route::delete('/overtime-policies/{overtimePolicy}', [EmployeeMasterController::class, 'deleteOvertimePolicy'])->middleware('permission:delete overtime policies');
 
-            Route::get('/onboarding-checklists', [EmployeeMasterController::class, 'onboardingChecklists']);
-            Route::post('/onboarding-checklists', [EmployeeMasterController::class, 'createOnboardingChecklist']);
-            Route::put('/onboarding-checklists/{onboardingChecklist}', [EmployeeMasterController::class, 'updateOnboardingChecklist']);
-            Route::delete('/onboarding-checklists/{onboardingChecklist}', [EmployeeMasterController::class, 'deleteOnboardingChecklist']);
+            Route::get('/onboarding-checklists', [EmployeeMasterController::class, 'onboardingChecklists'])->middleware('permission:create employee drafts');
+            Route::post('/onboarding-checklists', [EmployeeMasterController::class, 'createOnboardingChecklist'])->middleware('permission:create onboarding checklists');
+            Route::put('/onboarding-checklists/{onboardingChecklist}', [EmployeeMasterController::class, 'updateOnboardingChecklist'])->middleware('permission:edit onboarding checklists');
+            Route::delete('/onboarding-checklists/{onboardingChecklist}', [EmployeeMasterController::class, 'deleteOnboardingChecklist'])->middleware('permission:delete onboarding checklists');
         });
 
 
@@ -415,22 +415,34 @@ Route::middleware([
     |--------------------------------------------------------------------------
     | HR / Admin Attendance
     |--------------------------------------------------------------------------
+    |
+    | These expose EVERY employee's attendance (org-wide list, summary,
+    | per-employee history, single-record lookup by id with no ownership
+    | check). They previously shared `permission:view attendance` with the
+    | self-service routes above, so any authenticated employee with the
+    | ordinary "view attendance" permission (i.e. every employee - see the
+    | Employee role) could enumerate other employees' attendance - an IDOR/
+    | broken access control bug. Gated behind `edit attendance` instead,
+    | matching this module's own existing convention that HR/admin actions
+    | (approve/reject regularization) already require `edit attendance`
+    | while self-service uses `view attendance`. No new permission invented.
+    |
     */
 
             Route::get('/', [AttendanceController::class, 'index'])
-                ->middleware('permission:view attendance')
+                ->middleware('permission:edit attendance')
                 ->name('attendance.index');
 
             Route::get('/summary', [AttendanceController::class, 'summary'])
-                ->middleware('permission:view attendance')
+                ->middleware('permission:edit attendance')
                 ->name('attendance.summary');
 
             Route::get('/employee/{employee}', [AttendanceController::class, 'employeeAttendance'])
-                ->middleware('permission:view attendance')
+                ->middleware('permission:edit attendance')
                 ->name('attendance.employee');
 
             Route::get('/{attendance}', [AttendanceController::class, 'show'])
-                ->middleware('permission:view attendance')
+                ->middleware('permission:edit attendance')
                 ->name('attendance.show');
         });
         /*

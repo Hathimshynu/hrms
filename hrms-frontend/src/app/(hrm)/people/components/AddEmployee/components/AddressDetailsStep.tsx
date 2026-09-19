@@ -1,341 +1,154 @@
 "use client";
 
 import { Input } from "@/src/components/ui/Input";
-import { Select } from "@/src/components/ui/Select";
-import { useState } from "react";
+import type { AddressBlock, AddressValues, StepProps } from "../onboarding-form.types";
 
-const countries = [
-  { label: "India", value: "india" },
-  { label: "United States", value: "united_states" },
-  { label: "United Kingdom", value: "united_kingdom" },
-  { label: "Australia", value: "australia" },
-];
+// No country/state master exists in the backend (verified - only city is
+// free text in the original mock too), so these are plain text fields
+// rather than a fabricated dropdown of options.
+function AddressFields({
+  prefix,
+  block,
+  onChange,
+  errors,
+  disabled,
+}: {
+  prefix: "current" | "permanent";
+  block: AddressBlock;
+  onChange: (field: keyof AddressBlock, value: string) => void;
+  errors: Record<string, string>;
+  disabled?: boolean;
+}) {
+  const errorFor = (field: string) => errors[`${prefix}_address.${field}`];
 
-const states = [
-  { label: "Tamil Nadu", value: "tamil_nadu" },
-  { label: "Kerala", value: "kerala" },
-  { label: "Karnataka", value: "karnataka" },
-  { label: "Maharashtra", value: "maharashtra" },
-];
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">Address Line 1</label>
+          <Input
+            placeholder="Enter address line 1"
+            value={block.address_line_1}
+            onChange={(e) => onChange("address_line_1", e.target.value)}
+            error={errorFor("address_line_1")}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">Address Line 2</label>
+          <Input
+            placeholder="Enter address line 2"
+            value={block.address_line_2}
+            onChange={(e) => onChange("address_line_2", e.target.value)}
+            error={errorFor("address_line_2")}
+            disabled={disabled}
+          />
+        </div>
+      </div>
 
-export function AddressDetailsStep() {
-  const [sameAsCurrentAddress, setSameAsCurrentAddress] = useState(false);
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">City</label>
+          <Input
+            placeholder="Enter city"
+            value={block.city}
+            onChange={(e) => onChange("city", e.target.value)}
+            error={errorFor("city")}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">State</label>
+          <Input
+            placeholder="Enter state"
+            value={block.state}
+            onChange={(e) => onChange("state", e.target.value)}
+            error={errorFor("state")}
+            disabled={disabled}
+          />
+        </div>
+      </div>
 
-  const [currentAddress, setCurrentAddress] = useState({
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    state: "",
-    country: "",
-    postalCode: "",
-  });
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">Country</label>
+          <Input
+            placeholder="Enter country"
+            value={block.country}
+            onChange={(e) => onChange("country", e.target.value)}
+            error={errorFor("country")}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2 grid gap-px">
+          <label className="text-sm font-medium text-gray-700">Postal Code</label>
+          <Input
+            placeholder="Enter postal code"
+            value={block.postal_code}
+            onChange={(e) => onChange("postal_code", e.target.value)}
+            error={errorFor("postal_code")}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
 
-  const [permanentAddress, setPermanentAddress] = useState({
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    state: "",
-    country: "",
-    postalCode: "",
-  });
-
-  const handleCurrentAddressChange = (
-    field: keyof typeof currentAddress,
-    value: any,
-  ) => {
-    setCurrentAddress((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+export function AddressDetailsStep({ values, onChange, errors }: StepProps<AddressValues>) {
+  const updateCurrent = (field: keyof AddressBlock, value: string) => {
+    const nextCurrent = { ...values.current_address, [field]: value };
+    onChange({
+      current_address: nextCurrent,
+      ...(values.same_as_current ? { permanent_address: nextCurrent } : {}),
+    });
   };
 
-  const handlePermanentAddressChange = (
-    field: keyof typeof permanentAddress,
-    value: any,
-  ) => {
-    setPermanentAddress((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  const updatePermanent = (field: keyof AddressBlock, value: string) => {
+    onChange({ permanent_address: { ...values.permanent_address, [field]: value } });
   };
 
   const handleSameAddressChange = (checked: boolean) => {
-    setSameAsCurrentAddress(checked);
-
-    if (checked) {
-      setPermanentAddress({
-        ...currentAddress,
-      });
-    }
+    onChange({
+      same_as_current: checked,
+      ...(checked ? { permanent_address: { ...values.current_address } } : {}),
+    });
   };
 
   return (
     <div className="space-y-8">
-      {/* Current Address */}
       <div className="space-y-4">
-        <h3 className="text-base font-semibold text-gray-900">
-          Current Address
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentAddressLine1"
-              className="text-sm font-medium text-gray-700"
-            >
-              Address Line 1
-            </label>
-
-            <Input
-              id="currentAddressLine1"
-              name="currentAddressLine1"
-              placeholder="Enter address line 1"
-              value={currentAddress.addressLine1}
-              onChange={(e) =>
-                handleCurrentAddressChange("addressLine1", e.target.value)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentAddressLine2"
-              className="text-sm font-medium text-gray-700"
-            >
-              Address Line 2
-            </label>
-
-            <Input
-              id="currentAddressLine2"
-              name="currentAddressLine2"
-              placeholder="Enter address line 2"
-              value={currentAddress.addressLine2}
-              onChange={(e) =>
-                handleCurrentAddressChange("addressLine2", e.target.value)
-              }
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentCity"
-              className="text-sm font-medium text-gray-700"
-            >
-              City
-            </label>
-
-            <Input
-              id="currentCity"
-              name="currentCity"
-              placeholder="Enter city"
-              value={currentAddress.city}
-              onChange={(e) =>
-                handleCurrentAddressChange("city", e.target.value)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentState"
-              className="text-sm font-medium text-gray-700"
-            >
-              State
-            </label>
-
-            <Select
-              id="currentState"
-              name="currentState"
-              placeholder="Select state"
-              options={states}
-              value={currentAddress.state}
-              onChange={(value) => handleCurrentAddressChange("state", value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentCountry"
-              className="text-sm font-medium text-gray-700"
-            >
-              Country
-            </label>
-
-            <Select
-              id="currentCountry"
-              name="currentCountry"
-              placeholder="Select country"
-              options={countries}
-              value={currentAddress.country}
-              onChange={(value) => handleCurrentAddressChange("country", value)}
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="currentPostalCode"
-              className="text-sm font-medium text-gray-700"
-            >
-              Postal Code
-            </label>
-
-            <Input
-              id="currentPostalCode"
-              name="currentPostalCode"
-              placeholder="Enter postal code"
-              value={currentAddress.postalCode}
-              onChange={(e) =>
-                handleCurrentAddressChange("postalCode", e.target.value)
-              }
-            />
-          </div>
-        </div>
+        <h3 className="text-base font-semibold text-gray-900">Current Address</h3>
+        <AddressFields
+          prefix="current"
+          block={values.current_address}
+          onChange={updateCurrent}
+          errors={errors}
+        />
       </div>
 
-      {/* Permanent Address */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">
-            Permanent Address
-          </h3>
+          <h3 className="text-base font-semibold text-gray-900">Permanent Address</h3>
 
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input
               type="checkbox"
-              id="sameAsCurrentAddress"
-              name="sameAsCurrentAddress"
-              checked={sameAsCurrentAddress}
+              checked={values.same_as_current}
               onChange={(e) => handleSameAddressChange(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"
             />
-
             <span>Same as Current Address</span>
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentAddressLine1"
-              className="text-sm font-medium text-gray-700"
-            >
-              Address Line 1
-            </label>
-
-            <Input
-              id="permanentAddressLine1"
-              name="permanentAddressLine1"
-              placeholder="Enter address line 1"
-              value={permanentAddress.addressLine1}
-              onChange={(e) =>
-                handlePermanentAddressChange("addressLine1", e.target.value)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentAddressLine2"
-              className="text-sm font-medium text-gray-700"
-            >
-              Address Line 2
-            </label>
-
-            <Input
-              id="permanentAddressLine2"
-              name="permanentAddressLine2"
-              placeholder="Enter address line 2"
-              value={permanentAddress.addressLine2}
-              onChange={(e) =>
-                handlePermanentAddressChange("addressLine2", e.target.value)
-              }
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentCity"
-              className="text-sm font-medium text-gray-700"
-            >
-              City
-            </label>
-
-            <Input
-              id="permanentCity"
-              name="permanentCity"
-              placeholder="Enter city"
-              value={permanentAddress.city}
-              onChange={(e) =>
-                handlePermanentAddressChange("city", e.target.value)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentState"
-              className="text-sm font-medium text-gray-700"
-            >
-              State
-            </label>
-
-            <Select
-              id="permanentState"
-              name="permanentState"
-              placeholder="Select state"
-              options={states}
-              value={permanentAddress.state}
-              onChange={(value) => handlePermanentAddressChange("state", value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentCountry"
-              className="text-sm font-medium text-gray-700"
-            >
-              Country
-            </label>
-
-            <Select
-              id="permanentCountry"
-              name="permanentCountry"
-              placeholder="Select country"
-              options={countries}
-              value={permanentAddress.country}
-              onChange={(value) =>
-                handlePermanentAddressChange("country", value)
-              }
-            />
-          </div>
-
-          <div className="space-y-2 grid gap-px">
-            <label
-              htmlFor="permanentPostalCode"
-              className="text-sm font-medium text-gray-700"
-            >
-              Postal Code
-            </label>
-
-            <Input
-              id="permanentPostalCode"
-              name="permanentPostalCode"
-              placeholder="Enter postal code"
-              value={permanentAddress.postalCode}
-              onChange={(e) =>
-                handlePermanentAddressChange("postalCode", e.target.value)
-              }
-            />
-          </div>
-        </div>
+        <AddressFields
+          prefix="permanent"
+          block={values.permanent_address}
+          onChange={updatePermanent}
+          errors={errors}
+          disabled={values.same_as_current}
+        />
       </div>
     </div>
   );

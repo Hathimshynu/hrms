@@ -1,99 +1,33 @@
 "use client";
 
 import { DeleteAlert } from "@/src/components/common/ReusableAlert";
+import { InlineBanner } from "@/src/components/common/InlineBanner";
 import {
   Column,
   DataTable,
   FilterPill,
   StatusPill,
 } from "@/src/components/ui/Datatable";
-import { ArrowLeft, Plus, Upload, Users } from "lucide-react";
+import { usePermission } from "@/src/hooks/usePermission";
+import { parseApiError } from "@/src/lib/api/errors";
+import {
+  departmentService,
+  type DepartmentDto,
+  type DepartmentPayload,
+} from "@/src/lib/departments/department.service";
+import { MENU_MODULES } from "@/src/permissions/permissions";
+import { ArrowLeft, Plus, Upload } from "lucide-react";
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AddDepartment } from "../components/AddDepartment";
-import { DepartmentBarChart } from "../components/DepartmentBarChart";
 
-interface Department {
-  id: string;
-  name: string;
-  code: string;
-  head: string;
-  headAvatar?: string;
-  employeeCount: number;
-  status: "Active" | "Inactive" | "Under Review";
-  type: "Technical" | "Non-Technical" | "Administrative";
-}
-
-const departments: Department[] = [
-  {
-    id: "1",
-    name: "Information Technology",
-    code: "IT",
-    head: "Preethiv Raj",
-    headAvatar: "",
-    employeeCount: 45,
-    status: "Active",
-    type: "Technical",
-  },
-  {
-    id: "2",
-    name: "Human Resources",
-    code: "HR",
-    head: "Keerthana S",
-    headAvatar: "",
-    employeeCount: 35,
-    status: "Active",
-    type: "Administrative",
-  },
-  {
-    id: "3",
-    name: "FMCG",
-    code: "FMCG",
-    head: "Meena Lakshmi",
-    headAvatar: "",
-    employeeCount: 25,
-    status: "Active",
-    type: "Non-Technical",
-  },
-  {
-    id: "4",
-    name: "Business Development",
-    code: "BDE",
-    head: "Vignesh Raj",
-    headAvatar: "",
-    employeeCount: 18,
-    status: "Active",
-    type: "Non-Technical",
-  },
-  {
-    id: "5",
-    name: "BPO",
-    code: "BPO",
-    head: "Dinesh Kumar",
-    headAvatar: "",
-    employeeCount: 30,
-    status: "Active",
-    type: "Non-Technical",
-  },
-  {
-    id: "6",
-    name: "Medical Department",
-    code: "MED",
-    head: "Dr. Priya Mohan",
-    headAvatar: "",
-    employeeCount: 20,
-    status: "Active",
-    type: "Technical",
-  },
-];
-
-const STATUS_ORDER: Record<Department["status"], number> = {
+const STATUS_ORDER: Record<DepartmentDto["status"], number> = {
   Active: 1,
   "Under Review": 2,
   Inactive: 3,
 };
 
-const columns: Column<Department>[] = [
+const columns: Column<DepartmentDto>[] = [
   {
     key: "name",
     header: "Department",
@@ -112,14 +46,6 @@ const columns: Column<Department>[] = [
     ),
     sortValue: (row) => row.name,
     hideable: false,
-  },
-  {
-    key: "employeeCount",
-    header: "Employees",
-    accessor: (row) => (
-      <span className="font-semibold text-stone-700">{row.employeeCount}</span>
-    ),
-    sortValue: (row) => row.employeeCount,
   },
   {
     key: "type",
@@ -145,6 +71,15 @@ const columns: Column<Department>[] = [
     accessor: (row) => <StatusPill status={row.status} />,
     sortValue: (row) => row.status,
   },
+  {
+    key: "description",
+    header: "Description",
+    accessor: (row) => (
+      <span className="text-sm text-gray-500 line-clamp-1">
+        {row.description || "—"}
+      </span>
+    ),
+  },
 ];
 
 function useMultiFilter<T>(data: T[], getValue: (row: T) => string) {
@@ -166,127 +101,150 @@ function useMultiFilter<T>(data: T[], getValue: (row: T) => string) {
   return { selected, options, toggle, clear, matches };
 }
 
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const update = () => setMatches(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, [query]);
-
-  return matches;
-}
-
 export default function DepartmentsPage() {
+  // GET /api/menus only exposes view/edit/delete per module - no "create"
+  // flag exists, so the Add button is left ungated (per Phase 2/3 scope).
+  const { edit: canEdit, delete: canDelete } = usePermission(MENU_MODULES.DEPARTMENTS);
+
+  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [editingDepartment, setEditingDepartment] = React.useState<DepartmentDto | null>(null);
+  const [isAddDrawerOpen, setIsAddDrawerOpen] = React.useState(false);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveFormError, setSaveFormError] = React.useState<string | null>(null);
+  const [saveFieldErrors, setSaveFieldErrors] = React.useState<Record<string, string>>({});
+
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
+  const [departmentToDelete, setDepartmentToDelete] = React.useState<DepartmentDto | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   const typeFilter = useMultiFilter(departments, (d) => d.type);
   const statusFilter = useMultiFilter(departments, (d) => d.status);
 
-  const [editingDepartment, setEditingDepartment] =
-    React.useState<Department | null>(null);
-  const [isAddDrawerOpen, setIsAddDrawerOpen] = React.useState(false);
-  const [isEditDrawerOpen, setIsEditDrawerOpen] = React.useState(false);
+  const loadDepartments = React.useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await departmentService.list();
+      setDepartments(data);
+    } catch (err) {
+      setLoadError(parseApiError(err, "Failed to load departments.").message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = React.useState(false);
-  const [departmentToDelete, setDepartmentToDelete] =
-    React.useState<Department | null>(null);
-  const [isDeleting, setIsDeleting] = React.useState(false);
+  useEffect(() => {
+    loadDepartments();
+  }, [loadDepartments]);
 
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [tableHeight, setTableHeight] = useState(0);
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  useEffect(() => {
+    if (!successMessage) return;
+    const timer = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [successMessage]);
 
   const filteredData = React.useMemo(
     () =>
       departments
         .filter((row) => typeFilter.matches(row) && statusFilter.matches(row))
         .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]),
-    [typeFilter, statusFilter],
+    [departments, typeFilter, statusFilter],
   );
 
-  useEffect(() => {
-    if (!isDesktop || !tableContainerRef.current) return;
-
-    const el = tableContainerRef.current;
-    const observer = new ResizeObserver(() => {
-      setTableHeight(el.offsetHeight);
-    });
-
-    observer.observe(el);
-    setTableHeight(el.offsetHeight);
-
-    return () => observer.disconnect();
-  }, [isDesktop]);
-
-  const handleSave = (data: any) => {
-    if (data.id) {
-      console.log("Updating department:", data);
-    } else {
-      console.log("Creating department:", data);
+  const handleSave = async (payload: DepartmentPayload) => {
+    setIsSaving(true);
+    setSaveFormError(null);
+    setSaveFieldErrors({});
+    try {
+      if (editingDepartment) {
+        await departmentService.update(editingDepartment.id, payload);
+        setSuccessMessage("Department updated successfully.");
+      } else {
+        await departmentService.create(payload);
+        setSuccessMessage("Department created successfully.");
+      }
+      setIsAddDrawerOpen(false);
+      setIsEditDrawerOpen(false);
+      setEditingDepartment(null);
+      await loadDepartments();
+    } catch (err) {
+      const { message, fieldErrors } = parseApiError(err, "Failed to save department.");
+      if (Object.keys(fieldErrors).length > 0) {
+        setSaveFieldErrors(fieldErrors);
+      } else {
+        setSaveFormError(message);
+      }
+    } finally {
+      setIsSaving(false);
     }
-    setIsAddDrawerOpen(false);
-    setIsEditDrawerOpen(false);
-    setEditingDepartment(null);
   };
 
-  const handleEdit = (department: Department) => {
+  const handleEdit = (department: DepartmentDto) => {
     setEditingDepartment(department);
+    setSaveFormError(null);
+    setSaveFieldErrors({});
     setIsEditDrawerOpen(true);
   };
 
-  const handleDelete = (department: Department) => {
+  const handleDelete = (department: DepartmentDto) => {
     setDepartmentToDelete(department);
+    setDeleteError(null);
     setIsDeleteAlertOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!departmentToDelete) return;
 
     setIsDeleting(true);
-    setTimeout(() => {
-      console.log("Deleting department:", departmentToDelete);
-
-      setIsDeleting(false);
+    setDeleteError(null);
+    try {
+      await departmentService.remove(departmentToDelete.id);
+      setSuccessMessage("Department deleted successfully.");
       setIsDeleteAlertOpen(false);
       setDepartmentToDelete(null);
-    }, 1500);
+      await loadDepartments();
+    } catch (err) {
+      // Dependency-protection (409) and other backend errors are shown
+      // in place, not silently bypassed.
+      setDeleteError(parseApiError(err, "Failed to delete department.").message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleCancelDelete = () => {
     setIsDeleteAlertOpen(false);
     setDepartmentToDelete(null);
+    setDeleteError(null);
   };
 
-  const departmentHeads = React.useMemo(() => {
-    return departments.map((d) => ({
-      name: d.head,
-      department: d.name,
-      code: d.code,
-      employeeCount: d.employeeCount,
-      status: d.status,
-    }));
-  }, []);
-
   return (
-    <div className="min-h-screen w-full py-4 px-3 sm:px-6 lg:px-8 bg-[#F2F2F2] grid gap-5">
+    <div className="min-h-screen w-full py-4 px-3 sm:px-6 lg:px-8 bg-[#F2F2F2] grid grid-cols-[minmax(0,1fr)] gap-5">
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex gap-3 items-center min-w-0">
-          <div
+          <button type="button" aria-label="Go back"
             className="group flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-primary sm:h-10 sm:w-10"
             onClick={() => window.history.back()}
           >
             <ArrowLeft className="h-5 w-5 text-black group-hover:text-white" />
-          </div>
-          <div className="text-lg sm:text-2xl font-light truncate">
+          </button>
+          <h1 className="text-lg sm:text-2xl font-light truncate">
             Department Management
-          </div>
+          </h1>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => {
               setEditingDepartment(null);
+              setSaveFormError(null);
+              setSaveFieldErrors({});
               setIsAddDrawerOpen(true);
             }}
             aria-label="Add"
@@ -306,101 +264,40 @@ export default function DepartmentsPage() {
         </div>
       </div>
 
-      <div className="w-full flex flex-col lg:flex-row gap-5 items-start">
-        <DepartmentBarChart departments={filteredData} />
-      </div>
+      {successMessage && <InlineBanner type="success" message={successMessage} />}
+      {loadError && <InlineBanner type="error" message={loadError} />}
 
-      <div className="w-full flex flex-col lg:flex-row gap-5 items-start">
-        <div ref={tableContainerRef} className="w-full lg:w-[70%] min-w-0">
-          <DataTable
-            data={filteredData}
-            columns={columns}
-            keyExtractor={(row: { id: any }) => row.id}
-            searchKeys={["name", "code", "head"]}
-            filtersSlot={
-              <>
-                <FilterPill
-                  label="Type"
-                  options={typeFilter.options}
-                  selected={typeFilter.selected}
-                  onToggle={typeFilter.toggle}
-                  onClear={typeFilter.clear}
-                />
+      <div className="w-full">
+        <DataTable
+          data={filteredData}
+          columns={columns}
+          keyExtractor={(row) => row.id}
+          searchKeys={["name", "code"]}
+          filtersSlot={
+            <>
+              <FilterPill
+                label="Type"
+                options={typeFilter.options}
+                selected={typeFilter.selected}
+                onToggle={typeFilter.toggle}
+                onClear={typeFilter.clear}
+              />
 
-                <FilterPill
-                  label="Status"
-                  options={statusFilter.options}
-                  selected={statusFilter.selected}
-                  onToggle={statusFilter.toggle}
-                  onClear={statusFilter.clear}
-                />
-              </>
-            }
-            pageSize={10}
-            onExport={(rows: any) => console.log("export", rows)}
-            // onViewRow={handleView}
-            onEditRow={handleEdit}
-            onDeleteRow={handleDelete}
-          />
-        </div>
-
-        <div
-          className="w-full lg:w-[30%] bg-white rounded-lg border border-gray-200 flex flex-col overflow-hidden"
-          style={
-            isDesktop && tableHeight > 0
-              ? { height: `${tableHeight}px` }
-              : undefined
+              <FilterPill
+                label="Status"
+                options={statusFilter.options}
+                selected={statusFilter.selected}
+                onToggle={statusFilter.toggle}
+                onClear={statusFilter.clear}
+              />
+            </>
           }
-        >
-          {/* Header */}
-          <div className="flex items-center gap-2 p-4 border-b border-gray-200 shrink-0">
-            <Users className="h-5 w-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-stone-800">
-              Department Heads
-            </h3>
-          </div>
-
-          {/* Scroll Content */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 max-h-105 lg:max-h-none">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-              {departmentHeads.map((head, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100 hover:shadow-md transition-all duration-200 hover:border-blue-200"
-                >
-                  {/* Avatar */}
-                  <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center font-semibold text-white text-sm shrink-0">
-                    {head.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
-                  </div>
-
-                  {/* Details */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-stone-800 truncate">
-                      {head.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {head.department}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs text-gray-400">
-                        Code: {head.code}
-                      </span>
-                      <span className="text-xs text-gray-400">•</span>
-                      <span className="text-xs text-gray-400">
-                        {head.employeeCount} employees
-                      </span>
-                    </div>
-                  </div>
-
-                  <StatusPill status={head.status} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+          pageSize={10}
+          isLoading={isLoading}
+          emptyMessage="No departments found."
+          onEditRow={canEdit ? handleEdit : undefined}
+          onDeleteRow={canDelete ? handleDelete : undefined}
+        />
       </div>
 
       <AddDepartment
@@ -414,6 +311,9 @@ export default function DepartmentsPage() {
         }}
         department={isEditDrawerOpen ? editingDepartment : null}
         onSave={handleSave}
+        isSaving={isSaving}
+        serverErrors={saveFieldErrors}
+        formError={saveFormError}
       />
 
       <DeleteAlert
@@ -422,10 +322,14 @@ export default function DepartmentsPage() {
           if (!open && !isDeleting) {
             setIsDeleteAlertOpen(false);
             setDepartmentToDelete(null);
+            setDeleteError(null);
           }
         }}
         title="Delete Department"
-        description={`Are you sure you want to delete "${departmentToDelete?.name || "Department"}"? This action cannot be undone.`}
+        description={
+          deleteError ||
+          `Are you sure you want to delete "${departmentToDelete?.name || "Department"}"? This action cannot be undone.`
+        }
         confirmText={isDeleting ? "Deleting..." : "Delete"}
         cancelText="Cancel"
         onConfirm={handleConfirmDelete}

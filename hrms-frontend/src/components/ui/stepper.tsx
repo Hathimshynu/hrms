@@ -30,12 +30,35 @@ export function Stepper({
 }: StepperProps) {
   return (
     <div className={cn("w-full", className)}>
-      <nav aria-label="Progress" className="mb-8">
+      {orientation === "horizontal" && (
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-ink-soft">
+            <span>
+              Step {activeStep + 1} of {steps.length}
+              {steps[activeStep] ? ` · ${steps[activeStep].title}` : ""}
+            </span>
+            <span>{Math.round(((activeStep + 1) / steps.length) * 100)}%</span>
+          </div>
+          <div
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={steps.length}
+            aria-valuenow={activeStep + 1}
+            className="h-1.5 w-full overflow-hidden rounded-full bg-primary-soft"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
+              style={{ width: `${((activeStep + 1) / steps.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <nav aria-label="Progress" className="mb-8 overflow-x-auto pb-2">
         <ol
           className={cn(
             "flex",
             orientation === "horizontal"
-              ? "flex-row items-center justify-between"
+              ? "min-w-160 flex-row items-center justify-between"
               : "flex-col space-y-4",
           )}
         >
@@ -55,6 +78,8 @@ export function Stepper({
                 <button
                   onClick={() => !isDisabled && onStepChange?.(index)}
                   disabled={isDisabled}
+                  aria-current={isActive ? "step" : undefined}
+                  aria-label={`Step ${index + 1}: ${step.title}`}
                   className={cn(
                     "flex items-center justify-center group w-full",
                     "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-full",

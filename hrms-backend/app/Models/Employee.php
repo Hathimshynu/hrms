@@ -37,8 +37,10 @@ class Employee extends Model
 
         'reporting_manager_id',
         'employment_level_id',
+        'employment_level',
 
         'work_mode',
+        'work_phone',
         'employment_status',
         'lifecycle',
 

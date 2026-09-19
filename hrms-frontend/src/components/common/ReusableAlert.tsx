@@ -152,10 +152,13 @@ export function ReusableAlert({
   const isPermission = type === "permission";
 
   const handleConfirm = () => {
+    // Every current caller already manages its own open/close state around
+    // its (often async) onConfirm handler - e.g. to keep the dialog open
+    // and show a server error when the confirmed action fails. Closing it
+    // here too used to race that: it fired synchronously right after
+    // onConfirm(), before an async handler could report failure, forcing
+    // the dialog shut regardless of the outcome.
     onConfirm?.();
-    if (!loading) {
-      onOpenChange?.(false);
-    }
   };
 
   const handleCancel = () => {

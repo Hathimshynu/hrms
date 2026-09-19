@@ -3,139 +3,78 @@
 import { Input } from "@/src/components/ui/Input";
 import { Select } from "@/src/components/ui/Select";
 import { Textarea } from "@/src/components/ui/Textarea";
+import { employeeMastersService, type MasterOption } from "@/src/lib/employees/employee-masters.service";
+import { useEffect, useState } from "react";
+import type { OnboardingValues, StepProps } from "../onboarding-form.types";
 
+// Exact enum accepted by SaveEmployeeDraftRequest::stepElevenRules (hrms-backend).
 const onboardingStatuses = [
-  { label: "Not Started", value: "not_started" },
+  { label: "Pending", value: "Pending" },
   { label: "In Progress", value: "in_progress" },
   { label: "Completed", value: "completed" },
-  { label: "On Hold", value: "on_hold" },
 ];
 
-const onboardingChecklists = [
-  { label: "Document Verification", value: "document_verification" },
-  { label: "HR Orientation", value: "hr_orientation" },
-  { label: "Company Policies", value: "company_policies" },
-  { label: "Team Introduction", value: "team_introduction" },
-  { label: "IT Setup", value: "it_setup" },
-  { label: "Payroll Setup", value: "payroll_setup" },
-  { label: "Access Setup", value: "access_setup" },
-];
+export function OnboardingStep({ values, onChange, errors }: StepProps<OnboardingValues>) {
+  const [checklists, setChecklists] = useState<MasterOption[]>([]);
 
-const equipmentRequired = [
-  { label: "Laptop", value: "laptop" },
-  { label: "Monitor", value: "monitor" },
-  { label: "Keyboard", value: "keyboard" },
-  { label: "Mouse", value: "mouse" },
-  { label: "ID Card", value: "id_card" },
-  { label: "Access Card", value: "access_card" },
-  { label: "Headset", value: "headset" },
-  { label: "Mobile Phone", value: "mobile_phone" },
-];
+  useEffect(() => {
+    employeeMastersService.onboardingChecklists().then(setChecklists).catch(() => {});
+  }, []);
 
-const buddies = [
-  { label: "Select Buddy", value: "select_buddy" },
-  { label: "John Smith", value: "john_smith" },
-  { label: "David Wilson", value: "david_wilson" },
-  { label: "Sarah Johnson", value: "sarah_johnson" },
-];
-
-export function OnboardingStep() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="onboardingStatus"
-            className="text-sm font-medium text-gray-700"
-          >
-            Onboarding Status
-          </label>
-
+          <label className="text-sm font-medium text-gray-700">Onboarding Status</label>
           <Select
-            id="onboardingStatus"
-            name="onboardingStatus"
             placeholder="Select onboarding status"
             options={onboardingStatuses}
+            value={values.onboarding_status}
+            clearable
+            onChange={(v) => onChange({ onboarding_status: v as string })}
+            error={errors.onboarding_status}
           />
         </div>
 
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="onboardingStartDate"
-            className="text-sm font-medium text-gray-700"
-          >
-            Onboarding Start Date
-          </label>
-
+          <label className="text-sm font-medium text-gray-700">Onboarding Start Date</label>
           <Input
-            id="onboardingStartDate"
-            name="onboardingStartDate"
             type="date"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="onboardingChecklist"
-            className="text-sm font-medium text-gray-700"
-          >
-            Onboarding Checklist
-          </label>
-
-          <Select
-            id="onboardingChecklist"
-            name="onboardingChecklist"
-            placeholder="Select onboarding checklist"
-            options={onboardingChecklists}
-          />
-        </div>
-
-        <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="assignedBuddy"
-            className="text-sm font-medium text-gray-700"
-          >
-            Assigned Buddy
-          </label>
-
-          <Select
-            id="assignedBuddy"
-            name="assignedBuddy"
-            placeholder="Select assigned buddy"
-            options={buddies}
+            value={values.onboarding_start_date}
+            onChange={(e) => onChange({ onboarding_start_date: e.target.value })}
+            error={errors.onboarding_start_date}
           />
         </div>
       </div>
 
       <div className="space-y-2 grid gap-px">
-        <label
-          htmlFor="equipmentRequired"
-          className="text-sm font-medium text-gray-700"
-        >
-          Equipment Required
-        </label>
-
+        <label className="text-sm font-medium text-gray-700">Onboarding Checklist</label>
         <Select
-          id="equipmentRequired"
-          name="equipmentRequired"
-          placeholder="Select equipment"
-          options={equipmentRequired}
-          isMultiSelect
+          placeholder="Select onboarding checklist"
+          options={checklists.map((c) => ({ label: c.name, value: String(c.id) }))}
+          value={values.onboarding_checklist_id}
+          clearable
+          onChange={(v) => onChange({ onboarding_checklist_id: v as string })}
+          error={errors.onboarding_checklist_id}
         />
       </div>
 
-      <div className="space-y-2 grid gap-px">
-        <label htmlFor="hrNotes" className="text-sm font-medium text-gray-700">
-          HR Notes
-        </label>
+      {/* Assigned Buddy and Equipment Required were removed: the backend
+          expects assigned_buddy_id to reference a real users.id, but
+          GET /api/users is broken (missing controller methods - see the
+          Phase 0 audit), and there is no equipment list endpoint at all
+          (only a create-time pivot). Neither can be populated with real
+          data without a backend change, so no picker is shown rather than
+          inventing fake options - both fields are optional on the backend. */}
 
+      <div className="space-y-2 grid gap-px">
+        <label className="text-sm font-medium text-gray-700">HR Notes</label>
         <Textarea
-          id="hrNotes"
-          name="hrNotes"
           placeholder="Enter HR notes"
           rows={4}
+          value={values.hr_notes}
+          onChange={(e) => onChange({ hr_notes: e.target.value })}
+          error={errors.hr_notes}
         />
       </div>
     </div>

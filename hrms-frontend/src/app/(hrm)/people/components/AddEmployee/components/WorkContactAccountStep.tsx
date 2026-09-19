@@ -2,107 +2,92 @@
 
 import { Input } from "@/src/components/ui/Input";
 import { Select } from "@/src/components/ui/Select";
+import { roleService, type RoleDto } from "@/src/lib/roles/role.service";
+import { useEffect, useState } from "react";
+import type { StepProps, WorkContactValues } from "../onboarding-form.types";
 
-const roles = [
-  { label: "Employee", value: "employee" },
-  { label: "Manager", value: "manager" },
-  { label: "HR", value: "hr" },
-  { label: "Admin", value: "admin" },
-];
-
+// access_level enum, hrms-backend SaveEmployeeDraftRequest::stepThreeRules.
 const accessLevels = [
-  { label: "Basic", value: "basic" },
-  { label: "Standard", value: "standard" },
-  { label: "Manager", value: "manager" },
-  { label: "Full Access", value: "full_access" },
+  { label: "Organization", value: "Organization" },
+  { label: "Branch", value: "Branch" },
+  { label: "Department", value: "Department" },
+  { label: "Team", value: "Team" },
+  { label: "Self", value: "Self" },
 ];
 
-export function WorkContactAccountStep() {
+export function WorkContactAccountStep({ values, onChange, errors }: StepProps<WorkContactValues>) {
+  const [roles, setRoles] = useState<RoleDto[]>([]);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    roleService
+      .list()
+      .then(setRoles)
+      .catch(() => setRolesError("You don't have permission to view roles."));
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="workEmail"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="workEmail" className="text-sm font-medium text-gray-700">
             Work Email
           </label>
-
           <Input
             id="workEmail"
-            name="workEmail"
             type="email"
             placeholder="Enter work email"
+            value={values.work_email}
+            onChange={(e) => onChange({ work_email: e.target.value })}
+            error={errors.work_email}
           />
+          <p className="text-xs text-gray-400">This becomes the employee&apos;s login email.</p>
         </div>
 
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="workPhone"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="workPhone" className="text-sm font-medium text-gray-700">
             Work Phone
           </label>
-
           <Input
             id="workPhone"
-            name="workPhone"
             type="tel"
             placeholder="Enter work phone"
+            value={values.work_phone}
+            onChange={(e) => onChange({ work_phone: e.target.value })}
+            error={errors.work_phone}
           />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-           <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="role"
-            className="text-sm font-medium text-gray-700"
-          >
+        <div className="space-y-2 grid gap-px">
+          <label htmlFor="role" className="text-sm font-medium text-gray-700">
             Role
           </label>
-
           <Select
             id="role"
-            name="role"
-            placeholder="Select role"
-            options={roles}
+            placeholder={rolesError ? "Unavailable" : "Select role"}
+            options={roles.map((r) => ({ label: r.name, value: String(r.id) }))}
+            value={values.role_id}
+            clearable
+            disabled={!!rolesError}
+            onChange={(v) => onChange({ role_id: v as string })}
+            error={errors.role_id || rolesError || undefined}
           />
         </div>
 
         <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="username"
-            className="text-sm font-medium text-gray-700"
-          >
-            Username
-          </label>
-
-          <Input
-            id="username"
-            name="username"
-            placeholder="Enter username"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-    
-
-        <div className="space-y-2 grid gap-px">
-          <label
-            htmlFor="accessLevel"
-            className="text-sm font-medium text-gray-700"
-          >
+          <label htmlFor="accessLevel" className="text-sm font-medium text-gray-700">
             Access Level
           </label>
-
           <Select
             id="accessLevel"
-            name="accessLevel"
             placeholder="Select access level"
             options={accessLevels}
+            value={values.access_level}
+            clearable
+            onChange={(v) => onChange({ access_level: v as string })}
+            error={errors.access_level}
           />
         </div>
       </div>

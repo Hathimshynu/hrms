@@ -1,6 +1,6 @@
 "use client";
 
-import { format } from "date-fns";
+import { formatDate, localDateKey } from "@/src/lib/date/format";
 import * as React from "react";
 
 import { BarChartComponent } from "@/src/components/ui/BarChartComponent";
@@ -22,23 +22,27 @@ interface AttendanceBarChartProps {
   selectedDate: Date | null;
 }
 
-/** Fixed status order so bars appear in a consistent sequence every render */
+// Matches the real `attendances.status` enum exactly (hrms-backend
+// migration) - "Work From Home" was never a real status and has been
+// removed; "Holiday"/"Week Off" (real, previously missing) added.
 const STATUS_SEQUENCE = [
   "Present",
   "Late",
-  "Work From Home",
   "Half Day",
   "On Leave",
   "Absent",
+  "Holiday",
+  "Week Off",
 ] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   Present: "#10b981", // emerald
   Late: "#f59e0b", // amber
-  "Work From Home": "#06b6d4", // cyan
   "Half Day": "#8b5cf6", // purple
   "On Leave": "#3b82f6", // blue
   Absent: "#ef4444", // red
+  Holiday: "#ec4899", // pink
+  "Week Off": "#94a3b8", // slate
 };
 
 export function AttendanceBarChart({
@@ -72,7 +76,7 @@ export function AttendanceBarChart({
         </CardTitle>
         <p className="text-sm text-muted">
           {selectedDate
-            ? `${totalRecords} record${totalRecords === 1 ? "" : "s"} on ${format(selectedDate, "PPP")}`
+            ? `${totalRecords} record${totalRecords === 1 ? "" : "s"} on ${formatDate(localDateKey(selectedDate))}`
             : `${totalRecords} record${totalRecords === 1 ? "" : "s"}`}
         </p>
       </CardHeader>

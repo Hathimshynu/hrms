@@ -3,21 +3,35 @@
 
 import { useRouter } from "next/navigation";
 
-import { LoginPayload } from "../lib/auth/auth.service";
+import { GoogleLoginPayload, LoginPayload } from "../lib/auth/auth.service";
 import { useAuthStore } from "../store/auth.store";
 
 export function useAuth() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading, error, login, logout } =
-    useAuthStore();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    isInitializing,
+    error,
+    login,
+    googleLogin,
+    logout,
+    fetchCurrentUser,
+  } = useAuthStore();
 
   const handleLogin = async (payload: LoginPayload) => {
-    await login(payload);
-    router.push("/dashboard");
+    const loggedInUser = await login(payload);
+    router.push(loggedInUser.must_change_password ? "/change-password" : "/dashboard");
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleGoogleLogin = async (payload: GoogleLoginPayload) => {
+    const loggedInUser = await googleLogin(payload);
+    router.push(loggedInUser.must_change_password ? "/change-password" : "/dashboard");
+  };
+
+  const handleLogout = async () => {
+    await logout();
     router.push("/login");
   };
 
@@ -25,8 +39,11 @@ export function useAuth() {
     user,
     isAuthenticated,
     isLoading,
+    isInitializing,
     error,
     login: handleLogin,
+    googleLogin: handleGoogleLogin,
     logout: handleLogout,
+    fetchCurrentUser,
   };
 }
