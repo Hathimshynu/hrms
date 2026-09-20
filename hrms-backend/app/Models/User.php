@@ -144,6 +144,32 @@ class User extends Authenticatable implements JWTSubject
         return true;
     }
 
+    /**
+     * A user may only grant a role they are entitled to hold themselves:
+     * the Super Admin role is grantable only by a Super Admin, and any other
+     * role only if all of its permissions are permissions the actor already has.
+     */
+    public function canAssignRole(Role $role): bool
+    {
+        if ($role->name === 'Super Admin') {
+            return $this->hasRole('Super Admin');
+        }
+
+        $ownPermissionIds = $this->role?->permissions()->pluck('permissions.id') ?? collect();
+        $requiredPermissionIds = $role->permissions()->pluck('permissions.id');
+
+        return $requiredPermissionIds->diff($ownPermissionIds)->isEmpty();
+    }
+
+    /**
+     * Full employee records are visible to users allowed to list employees;
+     * everyone else may only open their own employee record.
+     */
+    public function canAccessEmployee(Employee $employee): bool
+    {
+        return $this->can('view employees') || $employee->user_id === $this->id;
+    }
+
     public function getPermissionNames()
     {
         return $this->role?->permissions()->pluck('name')

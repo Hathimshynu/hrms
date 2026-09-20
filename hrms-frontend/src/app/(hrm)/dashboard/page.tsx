@@ -12,6 +12,8 @@ import { useEffect, useState } from "react";
 
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { useAuth } from "@/src/hooks/useAuth";
+import { usePermission } from "@/src/hooks/usePermission";
+import { MENU_MODULES } from "@/src/permissions/permissions";
 import { parseApiError } from "@/src/lib/api/errors";
 import { attendanceService } from "@/src/lib/attendance/attendance.service";
 import type { AttendanceSummaryResponse } from "@/src/lib/attendance/attendance.types";
@@ -30,9 +32,12 @@ type State<T> =
   | { status: "denied" }
   | { status: "error"; message: string };
 
-function useSource<T>(load: () => Promise<T>): State<T> {
+// `enabled` mirrors the backend permission for the source: when the user's role
+// lacks it, skip the request (it would 403) and show the "not available" state.
+function useSource<T>(load: () => Promise<T>, enabled = true): State<T> {
   const [state, setState] = useState<State<T>>({ status: "loading" });
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     load()
       .then((data) => {
@@ -51,8 +56,8 @@ function useSource<T>(load: () => Promise<T>): State<T> {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return state;
+  }, [enabled]);
+  return enabled ? state : { status: "denied" };
 }
 
 function Stat<T>({
@@ -133,12 +138,17 @@ const ATTENDANCE_ROWS: { key: AttendanceKey; label: string }[] = [
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  const employees = useSource(() => employeeService.list({ limit: 1 }));
-  const attendance = useSource(() => attendanceService.summary());
-  const pendingReg = useSource(() =>
-    regularizationService.adminList({ status: "Pending", per_page: 1 }),
+  const { view: canViewEmployees } = usePermission(MENU_MODULES.EMPLOYEES);
+  const { edit: canManageAttendance } = usePermission(MENU_MODULES.ATTENDANCE);
+  const { view: canViewDrafts } = usePermission(MENU_MODULES.EMPLOYEE_DRAFTS);
+
+  const employees = useSource(() => employeeService.list({ limit: 1 }), canViewEmployees);
+  const attendance = useSource(() => attendanceService.summary(), canManageAttendance);
+  const pendingReg = useSource(
+    () => regularizationService.adminList({ status: "Pending", per_page: 1 }),
+    canManageAttendance,
   );
-  const drafts = useSource(() => onboardingService.listDrafts());
+  const drafts = useSource(() => onboardingService.listDrafts(), canViewDrafts);
 
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">

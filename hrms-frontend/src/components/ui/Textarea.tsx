@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, type ReactNode, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useId, type ReactNode, type TextareaHTMLAttributes } from "react";
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
@@ -9,7 +9,11 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, error, rightElement, id, className = "", ...props }, ref) => {
+  ({ label, error, rightElement, id: idProp, className = "", ...props }, ref) => {
+    // Generated id keeps <label htmlFor> associated with the control even when
+    // the caller does not pass one (screen readers / click-to-focus).
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
     return (
       <div className="w-full">
         {label && (

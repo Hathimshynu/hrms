@@ -1,7 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { isAxiosError } from "axios";
 import { useRouter } from "expo-router";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { authService } from "../src/api/auth.service";
@@ -137,17 +138,29 @@ function Field({
   onChangeText: (v: string) => void;
   error?: string;
 }) {
+  const [visible, setVisible] = React.useState(false);
   return (
     <View style={{ gap: 6 }}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, error && styles.inputError]}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+      <View style={{ justifyContent: "center" }}>
+        <TextInput
+          style={[styles.input, { paddingRight: 46 }, error && styles.inputError]}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={!visible}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Pressable
+          onPress={() => setVisible((v) => !v)}
+          hitSlop={10}
+          style={{ position: "absolute", right: 14, height: 48, justifyContent: "center" }}
+          accessibilityRole="button"
+          accessibilityLabel={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        >
+          <Ionicons name={visible ? "eye-off-outline" : "eye-outline"} size={22} color={colors.inkSoft} />
+        </Pressable>
+      </View>
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );

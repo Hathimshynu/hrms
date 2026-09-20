@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Jobs\SendEmployeeWelcomeEmail;
+use App\Mail\EmployeeWelcomeMail;
 use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeAddress;
@@ -18,11 +18,15 @@ use App\Models\EmployeeOnboardingDraft;
 use App\Models\Location;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class EmployeeOnboardingService
 {
@@ -256,17 +260,26 @@ class EmployeeOnboardingService
             ]);
 
             $user = $employee->user;
-            $temporaryPassword = null;
+
+            $assignedRole = Role::findOrFail($data['role_id']);
+            $actor = auth('api')->user();
+
+            if ($actor && ! $actor->canAssignRole($assignedRole)) {
+                throw new HttpResponseException(response()->json([
+                    'success' => false,
+                    'message' => 'You are not allowed to assign this role.',
+                ], 403));
+            }
 
             if (!$user) {
-                // $temporaryPassword = Str::random(12) . '!' . Str::random(4);
-                $temporaryPassword = 'Password@123'; // Temporary password for testing
-
+                // The real temporary password is generated and emailed only at
+                // completion (see complete()); until then the account holds an
+                // unusable random hash, so no plaintext is ever stored.
                 $user = User::create([
                     'name' => trim($employee->first_name . ' ' . $employee->last_name),
                     'username' => $employee->employee_code,
                     'email' => strtolower($data['work_email']),
-                    'password' => Hash::make($temporaryPassword),
+                    'password' => Hash::make(Str::random(64)),
                     'role_id' => $data['role_id'],
                     'access_level' => $data['access_level'],
                     'is_active' => true,
@@ -289,12 +302,6 @@ class EmployeeOnboardingService
                 ['employee_id' => $employee->id],
                 ['onboarding_status' => 'pending']
             );
-
-            if ($temporaryPassword) {
-                $onboarding->update([
-                    'temporary_password' => encrypt($temporaryPassword),
-                ]);
-            }
 
             $this->markStepCompleted($draft, 3, [
                 'work_email' => strtolower($data['work_email']),
@@ -695,7 +702,11 @@ class EmployeeOnboardingService
     {
         $this->ensureDraftIsActive($draft);
 
-        return DB::transaction(function () use ($draft) {
+        // Held in memory only, for the single email below. Never persisted,
+        // queued, logged or returned.
+        $temporaryPassword = null;
+
+        $result = DB::transaction(function () use ($draft, &$temporaryPassword) {
             $draft->refresh();
 
             $employee = $draft->employee;
@@ -733,10 +744,15 @@ class EmployeeOnboardingService
                 ]);
             }
 
-            $temporaryPassword = null;
+            // A first-time account (never signed in, still forced to change its
+            // password) receives its initial credentials now.
+            if ($user->must_change_password && $user->last_login_at === null) {
+                $temporaryPassword = TemporaryPasswordGenerator::generate();
 
-            if (!empty($onboarding->temporary_password)) {
-                $temporaryPassword = decrypt($onboarding->temporary_password);
+                $user->forceFill([
+                    'password' => Hash::make($temporaryPassword),
+                    'must_change_password' => true,
+                ])->save();
             }
 
             $employee->update([
@@ -756,22 +772,44 @@ class EmployeeOnboardingService
                 'last_saved_at' => now(),
             ]);
 
-            if ($temporaryPassword) {
-                SendEmployeeWelcomeEmail::dispatch($user, $temporaryPassword)->afterCommit();
-
-                $onboarding->update([
-                    'temporary_password' => null,
-                ]);
-            }
+            $onboarding->update([
+                'temporary_password' => null,
+            ]);
 
             return [
                 'user' => $user->fresh(),
                 'employee' => $employee->fresh(),
                 'draft' => $draft->fresh(),
                 'onboarding' => $onboarding->fresh(),
-                'email_sent' => (bool) $temporaryPassword,
+                'email_sent' => false,
             ];
         });
+
+        if ($temporaryPassword !== null) {
+            $result['email_sent'] = $this->sendWelcomeEmail($result['user'], $temporaryPassword);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Sends the credentials immediately (in-process). The plaintext is never
+     * put on a queue; a delivery failure is logged without any credential.
+     */
+    protected function sendWelcomeEmail(User $user, string $temporaryPassword): bool
+    {
+        try {
+            Mail::to($user->email)->send(new EmployeeWelcomeMail($user, $temporaryPassword));
+
+            return true;
+        } catch (Throwable $exception) {
+            Log::error('Welcome email could not be delivered.', [
+                'user_id' => $user->id,
+                'exception' => $exception::class,
+            ]);
+
+            return false;
+        }
     }
 
     /*

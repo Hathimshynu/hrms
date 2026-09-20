@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +45,10 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
+        if (! $request->user('api')->canAssignRole(Role::findOrFail($request->integer('role_id')))) {
+            return $this->roleForbidden();
+        }
+
         $user = User::create([
             'name' => $request->string('name')->toString(),
             'email' => $request->string('email')->toString(),
@@ -68,6 +73,17 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
+        $actor = $request->user('api');
+
+        // Neither a higher-privileged user may be edited, nor a higher role granted.
+        if ($user->role && ! $actor->canAssignRole($user->role)) {
+            return $this->roleForbidden();
+        }
+
+        if ($request->filled('role_id') && ! $actor->canAssignRole(Role::findOrFail($request->integer('role_id')))) {
+            return $this->roleForbidden();
+        }
+
         $data = $request->safe()->except(['password']);
 
         if ($request->filled('password')) {
@@ -85,6 +101,10 @@ class UserController extends Controller
 
     public function destroy(Request $request, User $user): JsonResponse
     {
+        if ($user->role && ! $request->user('api')->canAssignRole($user->role)) {
+            return $this->roleForbidden();
+        }
+
         if ($request->user()->id === $user->id) {
             return response()->json([
                 'success' => false,
@@ -105,5 +125,13 @@ class UserController extends Controller
             'success' => true,
             'message' => 'User deleted successfully.',
         ]);
+    }
+
+    private function roleForbidden(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'You are not allowed to assign or manage this role.',
+        ], Response::HTTP_FORBIDDEN);
     }
 }

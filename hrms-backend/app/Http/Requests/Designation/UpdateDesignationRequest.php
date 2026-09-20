@@ -16,7 +16,7 @@ class UpdateDesignationRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:255', Rule::unique('designations', 'name')->ignore($this->route('designation'))->withoutTrashed()],
-            'code' => ['sometimes', 'string', 'max:50', Rule::unique('designations', 'code')->ignore($this->route('designation'))->withoutTrashed()],
+            'code' => ['sometimes', 'string', 'max:50', Rule::unique('designations', 'code')->ignore($this->route('designation'))],
             'department_id' => ['sometimes', 'exists:departments,id'],
             'level' => ['sometimes', 'in:Entry,Mid,Senior,Lead,Manager'],
             'status' => ['sometimes', 'in:Active,Inactive,Under Review'],

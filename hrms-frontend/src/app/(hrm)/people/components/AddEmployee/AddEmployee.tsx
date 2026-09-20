@@ -23,7 +23,7 @@ import { EMPTY_FORM_STATE, type OnboardingFormState } from "./onboarding-form.ty
 interface AddEmployeeProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  onCompleted: () => void;
+  onCompleted: (result?: { emailSent: boolean }) => void;
 }
 
 const STEPS: Step[] = [
@@ -446,9 +446,9 @@ export function AddEmployee({ isOpen, setIsOpen, onCompleted }: AddEmployeeProps
     setIsCompleting(true);
     setFormError(null);
     try {
-      await onboardingService.complete(draftId);
+      const result = await onboardingService.complete(draftId);
       setIsOpen(false);
-      onCompleted();
+      onCompleted({ emailSent: result.data?.email?.sent !== false });
     } catch (err) {
       setFormError(parseApiError(err, "Failed to complete onboarding.").message);
     } finally {

@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\EmployeeCodeService;
+use App\Services\TemporaryPasswordGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -125,7 +126,10 @@ class EmployeeController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $employees->getCollection()->transform(function (Employee $employee) {
+        // Salary is payroll data: only users who may view payroll receive it.
+        $canViewSalary = $request->user('api')->can('view payroll');
+
+        $employees->getCollection()->transform(function (Employee $employee) use ($canViewSalary) {
             return [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,
@@ -155,7 +159,7 @@ class EmployeeController extends Controller
                     'name' => $employee->location->name,
                     'code' => $employee->location->code,
                 ] : null,
-                'salary' => $employee->salary,
+                'salary' => $canViewSalary ? $employee->salary : null,
                 'joining_date' => $employee->joining_date?->format('Y-m-d'),
                 'employment_type' => $employee->employment_type,
                 'work_mode' => $employee->work_mode,
@@ -187,7 +191,20 @@ class EmployeeController extends Controller
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $temporaryPassword = 'Aa9!' . Str::random(8);
+        $actor = $request->user('api');
+
+        if (isset($validated['role_id'])) {
+            $requestedRole = Role::find($validated['role_id']);
+
+            if ($requestedRole && ! $actor->canAssignRole($requestedRole)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not allowed to assign this role.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+        }
+
+        $temporaryPassword = TemporaryPasswordGenerator::generate();
         $employeeCode = $this->codeService->generate();
 
         $employee = DB::transaction(function () use ($validated, $temporaryPassword, $employeeCode) {
@@ -208,24 +225,53 @@ class EmployeeController extends Controller
             return Employee::create($validated);
         });
 
-        Mail::to($employee->email)->send(new EmployeeAccountCredentials(
-            $employee->first_name . ' ' . $employee->last_name,
-            $employee->email,
-            $temporaryPassword,
-        ));
+        // Sent in-process so the plaintext never touches a queue; a delivery
+        // failure is logged without any credential and must not fail the request.
+        $emailSent = true;
+        try {
+            Mail::to($employee->email)->send(new EmployeeAccountCredentials(
+                $employee->first_name . ' ' . $employee->last_name,
+                $employee->email,
+                $temporaryPassword,
+            ));
+        } catch (\Throwable $exception) {
+            $emailSent = false;
+            \Illuminate\Support\Facades\Log::error('Employee credentials email could not be delivered.', [
+                'employee_id' => $employee->id,
+                'exception' => $exception::class,
+            ]);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Employee created successfully. Login credentials were sent to the company email.',
+            'message' => $emailSent
+                ? 'Employee created successfully. Login credentials were sent to the company email.'
+                : 'Employee created successfully, but the credentials email could not be delivered. Ask an administrator to reset the account password.',
             'data' => $employee->load(['department', 'designation', 'user']),
         ], Response::HTTP_CREATED);
     }
 
-    public function show(Employee $employee): JsonResponse
+    public function show(Request $request, Employee $employee): JsonResponse
     {
+        $actor = $request->user('api');
+
+        if (! $actor->canAccessEmployee($employee)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden: you can only view your own employee record.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $employee->load(['department', 'designation', 'user.role']);
+
+        // Salary is visible only to payroll viewers and to the employee themselves.
+        if (! $actor->can('view payroll') && $employee->user_id !== $actor->id) {
+            $employee->makeHidden('salary');
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $employee->load(['department', 'designation', 'user.role']),
+            'data' => $employee,
         ]);
     }
 

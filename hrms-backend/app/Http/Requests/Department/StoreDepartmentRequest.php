@@ -16,7 +16,7 @@ class StoreDepartmentRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255', Rule::unique('departments', 'name')->withoutTrashed()],
-            'code' => ['required', 'string', 'max:50', Rule::unique('departments', 'code')->withoutTrashed()],
+            'code' => ['required', 'string', 'max:50', Rule::unique('departments', 'code')],
             'head_id' => ['nullable', 'exists:users,id'],
             'status' => ['required', 'in:Active,Inactive,Under Review'],
             'type' => ['required', 'in:Technical,Non-Technical,Administrative'],

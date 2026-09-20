@@ -118,15 +118,9 @@ php artisan migrate:fresh --seed --force
 
 ## Default administrator
 
-The seeder creates this account:
-
-```text
-Email:    admin@example.com
-Password: Password@123
-Role:     Super Admin
-```
-
-Change this password after the first login in a non-development environment.
+The seeder creates the Super Admin account from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in your `.env` (see `.env.example`).
+Choose a strong, unique `ADMIN_PASSWORD` before seeding; there is no built-in default password.
+The seeder only sets the password when the account is first created, so rotate it manually (Change Password screen) if the account was seeded with a weak value.
 
 ## Google sign-in setup
 
@@ -273,7 +267,7 @@ Accept: application/json
 ```json
 {
   "email": "admin@example.com",
-  "password": "Password@123",
+  "password": "<your ADMIN_PASSWORD>",
   "remember_me": true
 }
 ```
@@ -534,6 +528,8 @@ tests/Feature/Api/          API feature tests
 ## Important security notes
 
 - Never commit `.env` or real credentials.
+- Production must run with `APP_ENV=production` and `APP_DEBUG=false`. With `APP_DEBUG=true` error responses (including 404/405) expose exception classes, file paths and stack traces.
+- Never seed with a shared or default `ADMIN_PASSWORD`; rotate it after the first login.
 - Use HTTPS and set `JWT_COOKIE_SECURE=true` in production.
 - Set a production `GOOGLE_CLIENT_ID` and restrict its authorized origins.
 - Use a real SMTP provider in production instead of the `log` mailer.

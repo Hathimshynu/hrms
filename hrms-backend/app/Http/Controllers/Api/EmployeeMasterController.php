@@ -18,7 +18,9 @@ use App\Models\OvertimePolicy;
 use App\Models\OnboardingChecklist;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class EmployeeMasterController extends Controller
 {
@@ -214,7 +216,7 @@ class EmployeeMasterController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'code' => ['required', 'string', 'max:50'],
+            'code' => ['required', 'string', 'max:50', Rule::unique((new $model)->getTable(), 'code')],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
             'start_time' => ['nullable', 'date_format:H:i'],
@@ -227,7 +229,11 @@ class EmployeeMasterController extends Controller
             'multiplier' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $record = $model::create(array_intersect_key($data, array_flip($fields)));
+        try {
+            $record = $model::create(array_intersect_key($data, array_flip($fields)));
+        } catch (UniqueConstraintViolationException) {
+            return $this->duplicateCodeResponse();
+        }
 
         return response()->json(['success' => true, 'message' => 'Master record created successfully.', 'data' => $record], 201);
     }
@@ -236,7 +242,7 @@ class EmployeeMasterController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'code' => ['required', 'string', 'max:50'],
+            'code' => ['required', 'string', 'max:50', Rule::unique($record->getTable(), 'code')->ignore($record->getKey())],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
             'start_time' => ['nullable', 'date_format:H:i'],
@@ -249,9 +255,22 @@ class EmployeeMasterController extends Controller
             'multiplier' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $record->update(array_intersect_key($data, array_flip($fields)));
+        try {
+            $record->update(array_intersect_key($data, array_flip($fields)));
+        } catch (UniqueConstraintViolationException) {
+            return $this->duplicateCodeResponse();
+        }
 
         return response()->json(['success' => true, 'message' => 'Master record updated successfully.', 'data' => $record]);
+    }
+
+    private function duplicateCodeResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'A record with this code already exists.',
+            'errors' => ['code' => ['A record with this code already exists.']],
+        ], 422);
     }
 
     public function updateLeavePolicy(Request $request, LeavePolicy $leavePolicy): JsonResponse

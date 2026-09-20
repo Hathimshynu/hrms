@@ -399,7 +399,7 @@ Route::middleware([
     */
 
             Route::get('/admin/regularizations', [AttendanceRegularizationController::class, 'adminIndex'])
-                ->middleware('permission:view attendance')
+                ->middleware('permission:edit attendance')
                 ->name('attendance.admin.regularizations');
 
             Route::put('/admin/regularizations/{attendanceRegularization}/approve', [AttendanceRegularizationController::class, 'approve'])

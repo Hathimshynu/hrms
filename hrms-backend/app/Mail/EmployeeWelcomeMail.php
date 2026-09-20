@@ -31,9 +31,7 @@ class EmployeeWelcomeMail extends Mailable
             view: 'emails.employee-welcome',
             with: [
                 'employeeName' => $this->user->name,
-                // 'email' => $this->user->email,
-                'email' => 'hathimshynu@gmail.com', // Temporary email for testing
-                // 'temporaryPassword' => $this->temporaryPassword,
+                'email' => $this->user->email,
                 'temporaryPassword' => $this->temporaryPassword,
                 'loginUrl' => $loginUrl,
                 'role' => $this->user->role->name ?? 'Employee',

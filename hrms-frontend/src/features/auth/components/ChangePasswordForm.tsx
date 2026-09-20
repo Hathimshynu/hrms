@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/src/components/ui/Button";
-import { Input } from "@/src/components/ui/Input";
+import { PasswordInput } from "@/src/components/ui/PasswordInput";
 import { authService } from "@/src/lib/auth/auth.service";
 import { useAuthStore } from "@/src/store/auth.store";
 
@@ -125,30 +125,27 @@ export function ChangePasswordForm({ forced = false, embedded = false }: ChangeP
       )}
 
       <div className="grid gap-5">
-        <Input
+        <PasswordInput
           id="current_password"
           label="Current password"
-          type="password"
           autoComplete="current-password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           error={fieldErrors.current_password}
         />
 
-        <Input
+        <PasswordInput
           id="new_password"
           label="New password"
-          type="password"
           autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           error={fieldErrors.new_password}
         />
 
-        <Input
+        <PasswordInput
           id="new_password_confirmation"
           label="Confirm new password"
-          type="password"
           autoComplete="new-password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}

@@ -16,7 +16,7 @@ class UpdateDepartmentRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:255', Rule::unique('departments', 'name')->ignore($this->route('department'))->withoutTrashed()],
-            'code' => ['sometimes', 'string', 'max:50', Rule::unique('departments', 'code')->ignore($this->route('department'))->withoutTrashed()],
+            'code' => ['sometimes', 'string', 'max:50', Rule::unique('departments', 'code')->ignore($this->route('department'))],
             'head_id' => ['nullable', 'exists:users,id'],
             'status' => ['sometimes', 'in:Active,Inactive,Under Review'],
             'type' => ['sometimes', 'in:Technical,Non-Technical,Administrative'],

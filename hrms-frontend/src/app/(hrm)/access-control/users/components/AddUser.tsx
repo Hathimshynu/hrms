@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordInput } from "@/src/components/ui/PasswordInput";
 import { Button } from "@/src/components/ui/Button";
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 } from "@/src/components/ui/dialog";
 import { Input } from "@/src/components/ui/Input";
 import { Select } from "@/src/components/ui/Select";
+import { useAuth } from "@/src/hooks/useAuth";
 import { Switch } from "@/src/components/ui/Switch";
 import type { RoleDto } from "@/src/lib/roles/role.service";
 import type {
@@ -55,6 +57,9 @@ export function AddUser({
   formError,
 }: AddUserProps) {
   const isEditMode = !!user;
+  // UX only: the backend enforces role assignment; do not offer Super Admin to non-Super Admins.
+  const { user: actor } = useAuth();
+  const isSuperAdmin = actor?.roles?.includes("Super Admin") ?? false;
 
   const [formData, setFormData] = React.useState(emptyForm);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -194,7 +199,9 @@ export function AddUser({
             <Select
               label="Role"
               placeholder={rolesError ? "Unavailable" : "Select role"}
-              options={roles.map((r) => ({ label: r.name, value: String(r.id) }))}
+              options={roles
+                .filter((r) => r.name !== "Super Admin" || isSuperAdmin || String(r.id) === formData.role_id)
+                .map((r) => ({ label: r.name, value: String(r.id) }))}
               value={formData.role_id}
               clearable
               disabled={isSaving || !!rolesError}
@@ -249,9 +256,8 @@ export function AddUser({
 
             {wantsPassword && (
               <>
-                <Input
+                <PasswordInput
                   label="Password"
-                  type="password"
                   placeholder="Min. 8 characters"
                   value={formData.password}
                   onChange={(e) => handleChange("password", e.target.value)}
@@ -262,9 +268,8 @@ export function AddUser({
                   Must include uppercase, lowercase, a number, and a symbol.
                 </p>
 
-                <Input
+                <PasswordInput
                   label="Confirm Password"
-                  type="password"
                   placeholder="Re-enter password"
                   value={formData.password_confirmation}
                   onChange={(e) => handleChange("password_confirmation", e.target.value)}

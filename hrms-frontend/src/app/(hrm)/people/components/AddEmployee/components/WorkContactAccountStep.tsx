@@ -2,6 +2,7 @@
 
 import { Input } from "@/src/components/ui/Input";
 import { Select } from "@/src/components/ui/Select";
+import { useAuth } from "@/src/hooks/useAuth";
 import { roleService, type RoleDto } from "@/src/lib/roles/role.service";
 import { useEffect, useState } from "react";
 import type { StepProps, WorkContactValues } from "../onboarding-form.types";
@@ -18,6 +19,9 @@ const accessLevels = [
 export function WorkContactAccountStep({ values, onChange, errors }: StepProps<WorkContactValues>) {
   const [roles, setRoles] = useState<RoleDto[]>([]);
   const [rolesError, setRolesError] = useState<string | null>(null);
+  // UX only: the backend enforces role assignment; do not offer Super Admin to non-Super Admins.
+  const { user: actor } = useAuth();
+  const isSuperAdmin = actor?.roles?.includes("Super Admin") ?? false;
 
   useEffect(() => {
     roleService
@@ -67,7 +71,9 @@ export function WorkContactAccountStep({ values, onChange, errors }: StepProps<W
           <Select
             id="role"
             placeholder={rolesError ? "Unavailable" : "Select role"}
-            options={roles.map((r) => ({ label: r.name, value: String(r.id) }))}
+            options={roles
+              .filter((r) => r.name !== "Super Admin" || isSuperAdmin)
+              .map((r) => ({ label: r.name, value: String(r.id) }))}
             value={values.role_id}
             clearable
             disabled={!!rolesError}

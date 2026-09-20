@@ -231,10 +231,14 @@ export function MasterFormDialog<
               if (field.type === "time") {
                 return (
                   <div key={field.key} className="w-full">
-                    <label className="mb-1.5 block text-sm font-semibold text-ink">
+                    <label
+                      htmlFor={`master-field-${field.key}`}
+                      className="mb-1.5 block text-sm font-semibold text-ink"
+                    >
                       {field.label}
                     </label>
                     <input
+                      id={`master-field-${field.key}`}
                       type="time"
                       value={(formData[field.key] as string) ?? ""}
                       onChange={(e) => handleChange(field.key, e.target.value)}

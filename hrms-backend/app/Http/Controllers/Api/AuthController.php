@@ -161,27 +161,12 @@ class AuthController extends Controller
         */
 
             if (!$user) {
-
-                $role = Role::where('name', 'Employee')->first();
-
-                if (!$role) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Default Employee role is not configured.',
-                    ], Response::HTTP_INTERNAL_SERVER_ERROR);
-                }
-
-                $user = User::create([
-                    'name' => $google['name'] ?? $email,
-                    'email' => $email,
-                    'google_id' => $googleId,
-                    'avatar' => $google['picture'] ?? null,
-                    'password' => Hash::make(Str::random(40)),
-                    'role_id' => $role->id,
-                    'is_active' => true,
-                    'must_change_password' => false,
-                    'token_version' => 0,
-                ]);
+                // Google sign-in only works for accounts an administrator has
+                // already created; it never provisions new HRMS accounts.
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No HRMS account is associated with this Google account. Please contact your administrator.',
+                ], Response::HTTP_FORBIDDEN);
             } else {
 
                 /*
@@ -203,10 +188,17 @@ class AuthController extends Controller
             |--------------------------------------------------------------------------
             */
 
+                if ($user->google_id && $user->google_id !== $googleId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This account is linked to a different Google account.',
+                    ], Response::HTTP_FORBIDDEN);
+                }
+
                 if (!$user->google_id) {
                     $user->update([
                         'google_id' => $googleId,
-                        'avatar' => $google['picture'] ?? $user->avatar,
+                        'google_avatar' => $google['picture'] ?? $user->google_avatar,
                     ]);
                 }
             }

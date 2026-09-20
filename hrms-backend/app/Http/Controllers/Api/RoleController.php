@@ -49,6 +49,10 @@ class RoleController extends Controller
 
     public function update(Request $request, Role $role)
     {
+        if (! $this->canManageRole($request, $role)) {
+            return $this->forbidden();
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('roles', 'name')->ignore($role->id)],
         ]);
@@ -62,8 +66,12 @@ class RoleController extends Controller
         ]);
     }
 
-    public function destroy(Role $role)
+    public function destroy(Request $request, Role $role)
     {
+        if (! $this->canManageRole($request, $role)) {
+            return $this->forbidden();
+        }
+
         if ($role->users()->exists()) {
             return response()->json([
                 'success' => false,
@@ -104,6 +112,17 @@ class RoleController extends Controller
             'permission_ids.*' => ['integer', 'distinct', 'exists:permissions,id'],
         ]);
 
+        if (! $this->canManageRole($request, $role)) {
+            return $this->forbidden();
+        }
+
+        $currentIds = $role->permissions()->pluck('permissions.id')->all();
+        $addedIds = array_diff($validated['permission_ids'], $currentIds);
+
+        if ($this->grantsBeyondActor($request, $addedIds)) {
+            return $this->forbidden('You cannot grant permissions that you do not hold yourself.');
+        }
+
         $role->permissions()->sync($validated['permission_ids']);
 
         return response()->json([
@@ -119,8 +138,16 @@ class RoleController extends Controller
         ]);
     }
 
-    public function attachPermission(Role $role, Permission $permission)
+    public function attachPermission(Request $request, Role $role, Permission $permission)
     {
+        if (! $this->canManageRole($request, $role)) {
+            return $this->forbidden();
+        }
+
+        if ($this->grantsBeyondActor($request, [$permission->id])) {
+            return $this->forbidden('You cannot grant permissions that you do not hold yourself.');
+        }
+
         if ($role->permissions()->where('permissions.id', $permission->id)->exists()) {
             return response()->json([
                 'success' => false,
@@ -140,8 +167,12 @@ class RoleController extends Controller
         ]);
     }
 
-    public function detachPermission(Role $role, Permission $permission)
+    public function detachPermission(Request $request, Role $role, Permission $permission)
     {
+        if (! $this->canManageRole($request, $role)) {
+            return $this->forbidden();
+        }
+
         $deleted = $role->permissions()->detach($permission->id);
 
         if ($deleted === 0) {
@@ -155,5 +186,38 @@ class RoleController extends Controller
             'success' => true,
             'message' => 'Permission removed successfully.',
         ]);
+    }
+
+    /** Only a Super Admin may change or delete the Super Admin role. */
+    private function canManageRole(Request $request, Role $role): bool
+    {
+        return $role->name !== 'Super Admin' || $request->user('api')->hasRole('Super Admin');
+    }
+
+    /**
+     * True when any of the given permission ids is one the acting user does not
+     * hold (Super Admin holds all, so is never restricted).
+     *
+     * @param  array<int, int>  $permissionIds
+     */
+    private function grantsBeyondActor(Request $request, array $permissionIds): bool
+    {
+        $actor = $request->user('api');
+
+        if ($permissionIds === [] || $actor->hasRole('Super Admin')) {
+            return false;
+        }
+
+        $ownIds = $actor->role?->permissions()->pluck('permissions.id')->all() ?? [];
+
+        return array_diff($permissionIds, $ownIds) !== [];
+    }
+
+    private function forbidden(string $message = 'You are not allowed to manage this role.')
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+        ], 403);
     }
 }

@@ -4,13 +4,21 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 
 class EmployeeProfilePhotoController extends Controller
 {
-    public function show(Employee $employee)
+    public function show(Request $request, Employee $employee)
     {
+        if (! $request->user('api')->canAccessEmployee($employee)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden: you can only view your own profile photo.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
         if (!$employee->profile_photo) {
             return response()->json([
                 'success' => false,

@@ -342,8 +342,12 @@ export default function PeoplePage() {
       <AddEmployee
         isOpen={isAddDrawerOpen}
         setIsOpen={setIsAddDrawerOpen}
-        onCompleted={() => {
-          setSuccessMessage("Employee onboarding completed successfully.");
+        onCompleted={(result) => {
+          setSuccessMessage(
+            result?.emailSent === false
+              ? "Employee onboarding completed, but the welcome email could not be delivered. Ask an administrator to reset this account's password."
+              : "Employee onboarding completed successfully."
+          );
           loadEmployees();
         }}
       />

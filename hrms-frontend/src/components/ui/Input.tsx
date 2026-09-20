@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from "react";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,7 +9,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, rightElement, id, className = "", ...props }, ref) => {
+  ({ label, error, rightElement, id: idProp, className = "", ...props }, ref) => {
+    // Generated id keeps <label htmlFor> associated with the control even when
+    // the caller does not pass one (screen readers / click-to-focus).
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
     return (
       <div className="w-full">
         {label && (
