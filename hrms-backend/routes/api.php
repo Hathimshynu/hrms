@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\EmployeeMasterController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceRegularizationController;
+use App\Http\Controllers\Api\AbsenceController;
+use App\Http\Controllers\Api\LeaveController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\PermissionController;
 
@@ -331,6 +333,26 @@ Route::middleware([
 
 
         /*
+        |--------------------------------------------------------------------------
+        | Leave management
+        | Literal paths are registered before /{leave}.
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix('leaves')->group(function () {
+            Route::get('/types', [LeaveController::class, 'types'])->middleware('permission:view leaves')->name('leaves.types');
+            Route::get('/balance', [LeaveController::class, 'balance'])->middleware('permission:view leaves')->name('leaves.balance');
+            Route::get('/admin', [LeaveController::class, 'adminIndex'])->middleware('permission:approve leaves')->name('leaves.admin');
+
+            Route::get('/', [LeaveController::class, 'index'])->middleware('permission:view leaves')->name('leaves.index');
+            Route::post('/', [LeaveController::class, 'store'])->middleware('permission:create leaves')->name('leaves.store');
+            Route::get('/{leave}', [LeaveController::class, 'show'])->middleware('permission:view leaves')->name('leaves.show');
+            Route::post('/{leave}/cancel', [LeaveController::class, 'cancel'])->middleware('permission:edit leaves')->name('leaves.cancel');
+            Route::post('/{leave}/approve', [LeaveController::class, 'approve'])->middleware('permission:approve leaves')->name('leaves.approve');
+            Route::post('/{leave}/reject', [LeaveController::class, 'reject'])->middleware('permission:reject leaves')->name('leaves.reject');
+        });
+
+        /*
 |--------------------------------------------------------------------------
 | Attendance
 |--------------------------------------------------------------------------
@@ -440,6 +462,21 @@ Route::middleware([
             Route::get('/employee/{employee}', [AttendanceController::class, 'employeeAttendance'])
                 ->middleware('permission:edit attendance')
                 ->name('attendance.employee');
+
+            /*
+    |--------------------------------------------------------------------------
+    | Absence (derived from attendance, weekly offs and approved leave)
+    | Registered before /{attendance} so the literal path wins.
+    |--------------------------------------------------------------------------
+    */
+
+            Route::get('/absence', [AbsenceController::class, 'mine'])
+                ->middleware('permission:view attendance')
+                ->name('attendance.absence.mine');
+
+            Route::get('/absence/admin', [AbsenceController::class, 'adminIndex'])
+                ->middleware('permission:edit attendance')
+                ->name('attendance.absence.admin');
 
             Route::get('/{attendance}', [AttendanceController::class, 'show'])
                 ->middleware('permission:edit attendance')

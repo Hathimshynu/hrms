@@ -16,6 +16,8 @@ import dynamic from "next/dynamic";
 import { RegularizationReview } from "./components/RegularizationReview";
 import { TimesheetSummary } from "./components/TimesheetSummary";
 import { AttendanceCalendar } from "./components/AttendanceCalendar";
+import { AbsenceReview } from "./components/AbsenceReview";
+import { MyAbsence } from "./components/MyAbsence";
 import { MyAttendanceHistory } from "./components/MyAttendanceHistory";
 import { RegularizationSection } from "./components/RegularizationSection";
 import { TodayAttendanceCard } from "./components/TodayAttendanceCard";
@@ -262,11 +264,15 @@ export default function AttendancePage() {
 
         <TimesheetSummary month={calendarMonth} />
 
+        <MyAbsence month={calendarMonth} />
+
         <MyAttendanceHistory />
         </>
         )}
 
         {canViewAll && <RegularizationReview canReview={canViewAll} />}
+
+        {canViewAll && <AbsenceReview />}
 
         {canViewAll && (
           <>

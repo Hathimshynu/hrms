@@ -157,13 +157,9 @@ Only an existing HRMS user with the same verified Google email can sign in. The 
 
 ## Email setup
 
-Employee creation generates a strong temporary password and sends it to the employee email. For local development, the default `log` mailer writes email content to Laravel logs:
+Employee creation and onboarding generate a random temporary password and send it to the employee email in-process. The password is never stored or queued, and it is never returned by the API. If delivery fails the API/UI reports it and an administrator must reset the account password from Users.
 
-```env
-MAIL_MAILER=log
-MAIL_FROM_ADDRESS="hello@example.com"
-MAIL_FROM_NAME="${APP_NAME}"
-```
+Do not use `MAIL_MAILER=log` with real accounts: the log mailer writes the full email body, including the temporary password, to `storage/logs`. For local development use a mail catcher such as Mailpit (`MAIL_HOST=127.0.0.1`, `MAIL_PORT=1025`).
 
 To send real email, configure SMTP in `.env`:
 

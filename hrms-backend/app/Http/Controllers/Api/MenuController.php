@@ -20,6 +20,8 @@ class MenuController extends Controller
             ['id' => 'designations', 'module' => 'designations', 'label' => 'Designations', 'routePath' => '/admin/designations', 'view' => 'view designations', 'edit' => 'edit designations', 'delete' => 'delete designations'],
             ['id' => 'attendance', 'module' => 'attendance', 'label' => 'Attendance', 'routePath' => '/admin/attendance', 'view' => 'view attendance', 'edit' => 'edit attendance', 'delete' => 'delete attendance'],
             ['id' => 'leaves', 'module' => 'leaves', 'label' => 'Leaves', 'routePath' => '/admin/leaves', 'view' => 'view leaves', 'edit' => 'edit leaves', 'delete' => 'delete leaves'],
+            // Reviewer capability for leave: view = approve leaves, edit = reject leaves (Employees hold neither).
+            ['id' => 'leave-review', 'module' => 'leaveReview', 'label' => 'Leave Review', 'routePath' => '/leave', 'view' => 'approve leaves', 'edit' => 'reject leaves', 'delete' => null],
             ['id' => 'payroll', 'module' => 'payroll', 'label' => 'Payroll', 'routePath' => '/admin/payroll', 'view' => 'view payroll', 'edit' => 'edit payroll', 'delete' => 'delete payroll'],
             ['id' => 'reports', 'module' => 'reports', 'label' => 'Reports', 'routePath' => '/admin/reports', 'view' => 'view reports', 'edit' => null, 'delete' => null],
             ['id' => 'users', 'module' => 'users', 'label' => 'Users', 'routePath' => '/admin/users', 'view' => 'view users', 'edit' => 'edit users', 'delete' => 'delete users'],

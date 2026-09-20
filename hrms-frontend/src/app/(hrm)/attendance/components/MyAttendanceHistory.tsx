@@ -89,6 +89,7 @@ export function MyAttendanceHistory() {
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="date"
+            aria-label="From date"
             value={fromDate}
             onChange={(e) => {
               setFromDate(e.target.value);
@@ -98,6 +99,7 @@ export function MyAttendanceHistory() {
           <span className="text-sm text-muted">to</span>
           <Input
             type="date"
+            aria-label="To date"
             value={toDate}
             onChange={(e) => {
               setToDate(e.target.value);

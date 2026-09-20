@@ -30,6 +30,7 @@ export const MENU_MODULES = {
   DESIGNATIONS: "designations",
   ATTENDANCE: "attendance",
   LEAVES: "leaves",
+  LEAVE_REVIEW: "leaveReview",
   PAYROLL: "payroll",
   REPORTS: "reports",
   USERS: "users",
