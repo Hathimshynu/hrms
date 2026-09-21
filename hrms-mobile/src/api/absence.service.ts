@@ -1,16 +1,17 @@
 // src/api/absence.service.ts
 //
 // Absence is derived by the backend (attendance + weekly offs + approved
-// leave); the app only displays it. Holidays are not in the schema.
+// leave and the active holiday calendar); the app only displays it.
 import { api } from "./client";
 
-export type AbsenceStatus = "present" | "absent" | "leave" | "weekly_off" | "upcoming";
+export type AbsenceStatus = "present" | "absent" | "leave" | "weekly_off" | "holiday" | "upcoming";
 
 export interface AbsenceSummary {
   present: number;
   absent: number;
   leave: number;
   weekly_off: number;
+  holiday: number;
   upcoming: number;
 }
 
@@ -33,6 +34,7 @@ export const ABSENCE_LABELS: Record<AbsenceStatus, string> = {
   absent: "Absent",
   leave: "On Leave",
   weekly_off: "Week Off",
+  holiday: "Holiday",
   upcoming: "Upcoming",
 };
 

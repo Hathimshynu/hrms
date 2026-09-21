@@ -32,10 +32,12 @@ export interface LeaveTypeOption {
 export interface LeaveBalanceType {
   leave_type: string;
   name: string;
-  allocated: number | null; // null: the policy master stores no entitlement
-  used: number;
+  configured: boolean; // false: no entitlement is set for this employee/type/year
+  allocated: number | null; // null when not configured (never 0)
+  used: number; // approved days
   pending: number;
-  available: number | null;
+  available: number | null; // allocated - approved; null when not configured
+  available_after_pending: number | null;
 }
 
 export interface LeaveBalance {

@@ -11,6 +11,7 @@ export type ReportTab =
   | "attendance"
   | "absence"
   | "leave"
+  | "holidays"
   | "payroll"
   | "departments"
   | "monthly";
@@ -28,6 +29,7 @@ export interface ReportFilters {
   sort_by?: string;
   sort_dir?: "asc" | "desc";
   page?: number;
+  balance_page?: number; // leave report: page of the entitlement balances table
   per_page?: number;
 }
 
@@ -44,6 +46,7 @@ export interface DayCounts {
   absent: number;
   leave: number;
   weekly_off: number;
+  holiday: number;
   upcoming: number;
 }
 
@@ -86,9 +89,15 @@ export interface SummaryReport {
   attendance: AttendanceSummary;
   absence: { absent: number; pending_leave_days: number };
   leave: LeaveSummary;
+  entitlements: {
+    year: number;
+    configured: boolean;
+    summary: EntitlementSummary | null;
+    employees_without_entitlement: number;
+  };
+  holidays: { total: number; active: number; inactive: number };
   payroll?: PayrollTotals;
   includes_payroll: boolean;
-  unavailable: Record<string, string>;
 }
 
 export interface CountRow {
@@ -128,7 +137,6 @@ export interface AttendanceReport {
   daily: ({ date: string } & DayCounts)[];
   by_department: ({ name: string; attendance_percentage: number | null } & DayCounts)[];
   employees: Paginated<AttendanceEmployeeRow>;
-  unavailable: Record<string, string>;
 }
 
 export interface LeaveEmployeeRow {
@@ -144,6 +152,61 @@ export interface LeaveEmployeeRow {
   approved_days: number;
 }
 
+export interface EntitlementFigures {
+  entitlements: number;
+  entitled_days: number;
+  approved_days: number;
+  pending_days: number;
+  remaining_days: number;
+}
+
+export interface EntitlementSummary extends EntitlementFigures {
+  employees: number;
+}
+
+export interface EntitlementBalanceRow {
+  id: number;
+  employee_id: number;
+  employee_code: string | null;
+  name: string;
+  department: string | null;
+  leave_type: string;
+  leave_type_name: string;
+  entitled_days: number;
+  approved_days: number;
+  pending_days: number;
+  remaining_days: number;
+}
+
+/** Entitlement figures exist only where an entitlement was configured; `summary` is null otherwise. */
+export interface EntitlementReport {
+  year: number;
+  configured: boolean;
+  summary: EntitlementSummary | null;
+  employees_without_entitlement: number;
+  by_type: ({ code: string; name: string; employees: number } & EntitlementFigures)[];
+  by_department: ({ name: string; employees: number } & EntitlementFigures)[];
+  balances?: Paginated<EntitlementBalanceRow>;
+}
+
+export interface HolidayReportRow {
+  id: number;
+  name: string;
+  holiday_date: string;
+  weekday: string;
+  description: string | null;
+  is_active: boolean;
+}
+
+export interface HolidayReport {
+  from_date: string;
+  to_date: string;
+  summary: { total: number; active: number; inactive: number };
+  by_month: { month: string; count: number }[];
+  holidays: HolidayReportRow[];
+  note: string;
+}
+
 export interface LeaveReport {
   from_date: string;
   to_date: string;
@@ -152,7 +215,7 @@ export interface LeaveReport {
   by_department: { name: string; total: number; approved: number; approved_days: number }[];
   monthly: { month: string; pending: number; approved: number; rejected: number; cancelled: number; approved_days: number }[];
   employees: Paginated<LeaveEmployeeRow>;
-  unavailable: Record<string, string>;
+  entitlements: EntitlementReport;
   note: string;
 }
 
@@ -181,6 +244,7 @@ export interface DepartmentRow {
   absent: number;
   leave_days_attendance: number;
   weekly_off: number;
+  holiday: number;
   attendance_percentage: number | null;
   approved_leave_days: number;
   payroll_gross?: number;
@@ -203,6 +267,8 @@ export interface MonthlyReport {
   workforce: { active_employees: number; new_joiners: number; opening_workforce: number | null };
   attendance: AttendanceSummary;
   leave: LeaveSummary;
+  entitlements: EntitlementReport;
+  holidays: { active: number; list: HolidayReportRow[] };
   departments: DepartmentRow[];
   payroll?: PayrollTotals;
   includes_payroll: boolean;
@@ -228,6 +294,7 @@ export const reportsService = {
   attendance: (f: ReportFilters, signal?: AbortSignal) => get<AttendanceReport>("attendance", f, signal),
   absence: (f: ReportFilters, signal?: AbortSignal) => get<AttendanceReport>("absence", f, signal),
   leave: (f: ReportFilters, signal?: AbortSignal) => get<LeaveReport>("leave", f, signal),
+  holidays: (f: ReportFilters, signal?: AbortSignal) => get<HolidayReport>("holidays", f, signal),
   payroll: (f: ReportFilters, signal?: AbortSignal) => get<PayrollReport>("payroll", f, signal),
   departments: (f: ReportFilters, signal?: AbortSignal) => get<DepartmentsReport>("departments", f, signal),
   monthly: (f: ReportFilters, signal?: AbortSignal) => get<MonthlyReport>("monthly", f, signal),

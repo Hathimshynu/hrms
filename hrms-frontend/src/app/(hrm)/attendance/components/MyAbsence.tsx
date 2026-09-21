@@ -16,11 +16,11 @@ import {
 } from "@/src/lib/attendance/absence.service";
 import { formatDate } from "@/src/lib/date/format";
 
-const SUMMARY_ORDER: AbsenceStatus[] = ["present", "absent", "leave", "weekly_off", "upcoming"];
+const SUMMARY_ORDER: AbsenceStatus[] = ["present", "absent", "leave", "weekly_off", "holiday", "upcoming"];
 
 // Self-service absence for the month shown in the attendance calendar. All
 // values are derived by the backend from attendance, weekly offs and approved
-// leave; holidays are not represented in the schema so none are shown.
+// leave; holidays come from the holiday calendar and show as Holiday.
 export function MyAbsence({ month }: { month: Date }) {
   const [data, setData] = React.useState<AbsenceSelfResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -65,7 +65,7 @@ export function MyAbsence({ month }: { month: Date }) {
       ) : (
         data && (
           <>
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {SUMMARY_ORDER.map((s) => (
                 <div key={s} className="rounded-xl border border-border p-3">
                   <dt className="text-xs text-muted">{ABSENCE_LABELS[s]}</dt>

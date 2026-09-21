@@ -18,6 +18,7 @@ export const SERIES = {
   absent: { key: "absent", label: "Absent", color: "#ef4444" },
   leave: { key: "leave", label: "Approved leave", color: "#3b82f6" },
   weekly_off: { key: "weekly_off", label: "Weekly off", color: "#94a3b8" },
+  holiday: { key: "holiday", label: "Holiday", color: "#ec4899" },
   upcoming: { key: "upcoming", label: "Upcoming", color: "#cbd5e1" },
 } satisfies Record<string, Series>;
 

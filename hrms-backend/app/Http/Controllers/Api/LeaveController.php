@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
 use App\Services\LeaveDayCalculator;
+use App\Services\LeaveEntitlementService;
 use App\Support\Export\TabularExport;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -20,11 +21,13 @@ use Illuminate\Validation\ValidationException;
 /**
  * Leave management on top of the existing `leave_requests` table.
  *
- * Domain facts taken from the schema (no allocation, holiday or half-day
- * columns exist):
+ * Domain facts taken from the schema (no half-day column exists):
  *  - leave_type holds the code of an active leave policy;
  *  - lifecycle is pending -> approved | rejected | cancelled;
- *  - total_days = days in range minus the employee's weekly-off days;
+ *  - total_days = days in range minus the employee's weekly-off days and the
+ *    active holidays;
+ *  - a request needs a leave entitlement for its start year and must fit in the
+ *    remaining (entitled - approved) days, checked on apply and again on approve;
  *  - approved_by/approved_at record the reviewer for both approve and reject,
  *    rejection_reason holds the reviewer's remarks on rejection.
  */
@@ -32,7 +35,10 @@ class LeaveController extends Controller
 {
     private const ACTIVE_STATUSES = ['pending', 'approved'];
 
-    public function __construct(private readonly LeaveDayCalculator $days) {}
+    public function __construct(
+        private readonly LeaveDayCalculator $days,
+        private readonly LeaveEntitlementService $entitlements,
+    ) {}
 
     /** Active leave policies the employee can apply against. */
     public function types(): JsonResponse
@@ -44,9 +50,10 @@ class LeaveController extends Controller
     }
 
     /**
-     * Derived usage per leave type for a calendar year (by start date).
-     * The leave policy master stores no entitlement, so `allocated` and
-     * `available` are null rather than invented.
+     * Balance per leave type for a calendar year (by start date): the manual
+     * entitlement (null when none is configured, never an invented 0) and the
+     * approved/pending days derived from leave requests.
+     * available = entitled - approved; available_after_pending also subtracts pending.
      */
     public function balance(LeaveListRequest $request): JsonResponse
     {
@@ -56,28 +63,39 @@ class LeaveController extends Controller
         $totals = LeaveRequest::query()
             ->where('employee_id', $employee->id)
             ->whereIn('status', self::ACTIVE_STATUSES)
-            ->whereYear('start_date', $year)
+            ->whereBetween('start_date', [$year.'-01-01', $year.'-12-31'])
             ->selectRaw('leave_type, status, SUM(total_days) as days')
             ->groupBy('leave_type', 'status')
             ->get()
             ->groupBy('leave_type');
 
+        $entitled = DB::table('leave_entitlements')
+            ->where('employee_id', $employee->id)
+            ->where('leave_year', $year)
+            ->pluck('entitled_days', 'leave_policy_id');
+
         $policies = LeavePolicy::withTrashed()
             ->where(fn ($q) => $q->where(fn ($active) => $active->where('is_active', true)->whereNull('deleted_at'))
-                ->orWhereIn('code', $totals->keys()->all()))
+                ->orWhereIn('code', $totals->keys()->all())
+                ->orWhereIn('id', $entitled->keys()->all()))
             ->orderBy('name')
-            ->get(['name', 'code']);
+            ->get(['id', 'name', 'code']);
 
-        $types = $policies->map(function ($policy) use ($totals) {
+        $types = $policies->map(function ($policy) use ($totals, $entitled) {
             $rows = $totals->get($policy->code, collect());
+            $approved = (float) ($rows->firstWhere('status', 'approved')->days ?? 0);
+            $pending = (float) ($rows->firstWhere('status', 'pending')->days ?? 0);
+            $allocated = $entitled->has($policy->id) ? (float) $entitled[$policy->id] : null;
 
             return [
                 'leave_type' => $policy->code,
                 'name' => $policy->name,
-                'allocated' => null,
-                'used' => (float) ($rows->firstWhere('status', 'approved')->days ?? 0),
-                'pending' => (float) ($rows->firstWhere('status', 'pending')->days ?? 0),
-                'available' => null,
+                'configured' => $allocated !== null,
+                'allocated' => $allocated,
+                'used' => $approved,
+                'pending' => $pending,
+                'available' => $allocated === null ? null : round($allocated - $approved, 2),
+                'available_after_pending' => $allocated === null ? null : round($allocated - $approved - $pending, 2),
             ];
         })->values();
 
@@ -85,7 +103,7 @@ class LeaveController extends Controller
             'success' => true,
             'data' => [
                 'year' => $year,
-                'allocation_configured' => false,
+                'allocation_configured' => $types->contains('configured', true),
                 'types' => $types,
             ],
         ]);
@@ -132,11 +150,16 @@ class LeaveController extends Controller
             ]);
         }
 
-        $totalDays = $this->days->countWorkingDays($this->days->weeklyOffDays($employee), $from, $to);
+        $totalDays = $this->days->countWorkingDays(
+            $this->days->weeklyOffDays($employee),
+            $from,
+            $to,
+            $this->days->holidays($from, $to),
+        );
 
         if ($totalDays === 0) {
             throw ValidationException::withMessages([
-                'start_date' => ['The selected dates fall entirely on weekly offs, so no leave is needed.'],
+                'start_date' => ['The selected dates fall entirely on weekly offs or holidays, so no leave is needed.'],
             ]);
         }
 
@@ -156,6 +179,8 @@ class LeaveController extends Controller
                     'start_date' => ['These dates overlap an existing pending or approved leave request.'],
                 ]);
             }
+
+            $this->entitlements->assertCanApply($employee->id, $request->string('leave_type')->toString(), (int) $from->format('Y'), $totalDays);
 
             return LeaveRequest::create([
                 'employee_id' => $employee->id,
@@ -357,6 +382,10 @@ class LeaveController extends Controller
                 throw ValidationException::withMessages([
                     'status' => ['Only pending leave requests can be '.$status.'.'],
                 ]);
+            }
+
+            if ($status === 'approved') {
+                $this->entitlements->assertCanApprove($locked);
             }
 
             $locked->update([

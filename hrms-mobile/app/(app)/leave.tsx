@@ -178,26 +178,32 @@ export default function LeaveScreen() {
                   <Text style={styles.cardTitle}>{t.name}</Text>
                   <View style={styles.balanceRow}>
                     <View>
-                      <Text style={styles.metricLabel}>Approved (used)</Text>
+                      <Text style={styles.metricLabel}>Approved</Text>
                       <Text style={styles.metric}>{t.used}</Text>
                     </View>
                     <View>
                       <Text style={styles.metricLabel}>Pending</Text>
                       <Text style={styles.metric}>{t.pending}</Text>
                     </View>
-                    {t.available !== null && (
-                      <View>
-                        <Text style={styles.metricLabel}>Available</Text>
-                        <Text style={styles.metric}>{t.available}</Text>
-                      </View>
-                    )}
+                    <View>
+                      <Text style={styles.metricLabel}>Entitlement</Text>
+                      <Text style={t.allocated === null ? styles.hint : styles.metric}>
+                        {t.allocated === null ? "Not configured" : t.allocated}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text style={styles.metricLabel}>Remaining</Text>
+                      <Text style={t.available === null ? styles.hint : styles.metric}>
+                        {t.available === null ? "Not configured" : t.available}
+                      </Text>
+                    </View>
                   </View>
                 </Card>
               ))}
               {balance && !balance.allocation_configured && (
                 <Text style={styles.hint}>
-                  Leave entitlements are not configured, so the remaining balance cannot be shown. Days are approved and
-                  pending working days.
+                  No leave entitlement is configured for you this year, so the remaining balance cannot be shown. Contact HR
+                  before applying for leave.
                 </Text>
               )}
               <Text style={[styles.section, { marginTop: 8 }]}>My requests</Text>

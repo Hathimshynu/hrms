@@ -9,9 +9,13 @@ interface Props {
   error: string | null;
 }
 
-// Usage per leave type for the year, derived by the backend from real leave
-// requests. The leave policy master has no entitlement field, so allocated
-// and available balances are not available and are not shown.
+const n = (v: number) => String(Number.isInteger(v) ? v : Number(v.toFixed(2)));
+
+// Balance per leave type for the year. Entitlement is set by HR/Admin; where
+// none is configured the card says so instead of showing 0, because 0 would
+// read as "this employee is entitled to zero days".
+// Remaining = entitlement - approved. Pending days are shown separately and
+// do not reduce Remaining until they are approved.
 export function LeaveBalanceCards({ balance, isLoading, error }: Props) {
   return (
     <section className="grid gap-3" aria-labelledby="leave-balance-title">
@@ -35,26 +39,48 @@ export function LeaveBalanceCards({ balance, isLoading, error }: Props) {
             <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {balance.types.map((t) => (
                 <li key={t.leave_type} className="rounded-2xl border border-border bg-surface p-4">
-                  <p className="text-sm font-semibold text-ink">{t.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-ink">{t.name}</p>
+                    {!t.configured && (
+                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                        Not configured
+                      </span>
+                    )}
+                  </div>
                   <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <dt className="text-xs text-muted">Approved (used)</dt>
-                      <dd className="text-2xl font-semibold text-ink">{t.used}</dd>
+                      <dt className="text-xs text-muted">Entitlement</dt>
+                      <dd className="text-2xl font-semibold text-ink">
+                        {t.allocated === null ? <span className="text-base font-medium text-muted">Not configured</span> : n(t.allocated)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">Approved</dt>
+                      <dd className="text-2xl font-semibold text-ink">{n(t.used)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted">Pending</dt>
-                      <dd className="text-2xl font-semibold text-ink">{t.pending}</dd>
+                      <dd className="text-2xl font-semibold text-ink">{n(t.pending)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted">Remaining</dt>
+                      <dd className="text-2xl font-semibold text-ink">
+                        {t.available === null ? <span className="text-base font-medium text-muted">Not configured</span> : n(t.available)}
+                      </dd>
                     </div>
                   </dl>
+                  {t.configured && t.pending > 0 && t.available_after_pending !== null && (
+                    <p className="mt-2 text-xs text-muted">
+                      {n(t.available_after_pending)} day(s) would remain if all pending requests are approved.
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
-            {!balance.allocation_configured && (
-              <p className="text-xs text-muted">
-                Leave entitlements are not configured in the leave policy, so remaining balance cannot be calculated.
-                Days shown are approved and pending working days.
-              </p>
-            )}
+            <p className="text-xs text-muted">
+              Remaining = entitlement − approved days. Pending days are not deducted until approved. Days exclude weekly offs and holidays.
+              {!balance.allocation_configured && " No entitlement is configured for you this year; contact HR before applying for leave."}
+            </p>
           </>
         )
       )}

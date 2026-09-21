@@ -14,10 +14,12 @@ use Illuminate\Validation\ValidationException;
 /**
  * Read-only reporting over data that already exists. Attendance/absence
  * figures come from AbsenceCalculationService (the single source of truth for
- * present / absent / leave / weekly-off / upcoming); leave and payroll figures
- * are SQL aggregates over `leave_requests` and `payrolls`. Nothing is stored,
- * nothing is invented: metrics the schema cannot support (leave entitlement,
- * holidays, historical headcount / exits) are reported as unavailable.
+ * present / absent / leave / weekly-off / holiday / upcoming); leave, entitlement,
+ * holiday and payroll figures are SQL aggregates over `leave_requests`,
+ * `leave_entitlements`, `holidays` and `payrolls`. Nothing is stored, nothing
+ * is invented: metrics the schema cannot support (historical headcount /
+ * exits) are reported as unavailable, and entitlement figures exist only where
+ * an entitlement has actually been configured.
  *
  * Every method takes the already-validated filter request. Payroll methods
  * must only be reached by callers holding `view payroll` (enforced by routes
@@ -32,8 +34,6 @@ class ReportService
     public const MAX_AGGREGATE_RANGE = 731;
 
     public const UNAVAILABLE = [
-        'leave_entitlement' => 'Leave entitlements are not configured in the leave policy, so allocation, carry-forward and remaining balance cannot be reported.',
-        'holidays' => 'There is no holiday calendar in the system, so holidays are not part of any report.',
         'opening_workforce' => 'The system stores no exit date or status history, so opening headcount for a past period cannot be calculated defensibly.',
     ];
 
@@ -244,7 +244,7 @@ class ReportService
         $employees = $this->sorted(
             $employees,
             $request,
-            ['name', 'employee_code', 'department', 'present', 'absent', 'leave', 'weekly_off', 'upcoming', 'attendance_percentage', 'pending_leave_days'],
+            ['name', 'employee_code', 'department', 'present', 'absent', 'leave', 'weekly_off', 'holiday', 'upcoming', 'attendance_percentage', 'pending_leave_days'],
             $absenceView ? 'absent' : 'name',
             $absenceView ? 'desc' : 'asc',
         );
@@ -284,7 +284,6 @@ class ReportService
             'by_department' => collect($m['byDept'])->map(fn ($c) => $c + ['attendance_percentage' => $this->percentage($c)])->sortBy('name')->values()->all(),
             'employees' => $this->paginate($employees, $request),
             '_all_employees' => $employees,
-            'unavailable' => ['holidays' => self::UNAVAILABLE['holidays']],
         ];
     }
 
@@ -307,7 +306,7 @@ class ReportService
     }
 
     /** @return array<string, mixed> */
-    public function leave(Request $request, bool $paginated = true): array
+    public function leave(Request $request, bool $paginated = true, bool $withBalances = true): array
     {
         [$from, $to] = $this->range($request, self::MAX_AGGREGATE_RANGE, 180);
         $base = fn () => $this->leaveBase($request, $from, $to);
@@ -379,8 +378,146 @@ class ReportService
             'by_department' => $byDepartment,
             'monthly' => $trend,
             'employees' => $employees,
-            'unavailable' => ['leave_entitlement' => self::UNAVAILABLE['leave_entitlement']],
+            'entitlements' => $this->entitlements($request, $request->filled('year') ? $request->integer('year') : $to->year, $paginated, $withBalances),
             'note' => 'Requests are counted when they overlap the selected dates; the monthly trend and approved days are attributed to the month the leave starts.',
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Leave entitlements (SQL over leave_entitlements + leave_requests)
+    // ------------------------------------------------------------------
+
+    /**
+     * Entitlement figures for one leave year. Only employees that actually have
+     * an entitlement row appear: no employee is given an assumed allocation, and
+     * `employees_without_entitlement` says how many active employees have none.
+     * remaining = entitled - approved, approved/pending are derived from requests
+     * that start inside the year.
+     *
+     * @return array<string, mixed>
+     */
+    public function entitlements(Request $request, int $year, bool $paginated = true, bool $withBalances = true): array
+    {
+        $usage = DB::table('leave_requests')
+            ->whereNull('deleted_at')
+            ->whereIn('status', ['approved', 'pending'])
+            ->whereBetween('start_date', [$year.'-01-01', $year.'-12-31'])
+            ->selectRaw("employee_id, leave_type, COALESCE(SUM(CASE WHEN status = 'approved' THEN total_days END), 0) as approved, COALESCE(SUM(CASE WHEN status = 'pending' THEN total_days END), 0) as pending")
+            ->groupBy('employee_id', 'leave_type');
+
+        $base = fn () => DB::table('leave_entitlements as le')
+            ->join('employees as e', 'e.id', '=', 'le.employee_id')
+            ->join('leave_policies as lp', 'lp.id', '=', 'le.leave_policy_id')
+            ->leftJoinSub($usage, 'u', fn ($j) => $j->on('u.employee_id', '=', 'le.employee_id')->on('u.leave_type', '=', 'lp.code'))
+            ->whereNull('e.deleted_at')
+            ->where('le.leave_year', $year)
+            ->when($request->filled('department_id'), fn ($q) => $q->where('e.department_id', $request->integer('department_id')))
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('le.employee_id', $request->integer('employee_id')))
+            ->when($request->filled('leave_type'), fn ($q) => $q->where('lp.code', $request->string('leave_type')->toString()));
+
+        $sums = 'COUNT(*) as entitlements, COUNT(DISTINCT le.employee_id) as employees, SUM(le.entitled_days) as entitled, COALESCE(SUM(u.approved), 0) as approved, COALESCE(SUM(u.pending), 0) as pending';
+        $figures = fn ($r) => [
+            'entitlements' => (int) $r->entitlements,
+            'entitled_days' => round((float) $r->entitled, 2),
+            'approved_days' => round((float) $r->approved, 2),
+            'pending_days' => round((float) $r->pending, 2),
+            'remaining_days' => round((float) $r->entitled - (float) $r->approved, 2),
+        ];
+
+        $total = $base()->selectRaw($sums)->first();
+
+        $byType = $base()->selectRaw('lp.code as code, lp.name as name, '.$sums)->groupBy('lp.code', 'lp.name')->orderBy('lp.name')->get()
+            ->map(fn ($r) => ['code' => $r->code, 'name' => $r->name, 'employees' => (int) $r->employees] + $figures($r))->all();
+
+        $byDepartment = $base()->leftJoin('departments as d', 'd.id', '=', 'e.department_id')
+            ->selectRaw("COALESCE(d.name, 'No department') as name, ".$sums)->groupBy('d.name')->orderBy('d.name')->get()
+            ->map(fn ($r) => ['name' => $r->name, 'employees' => (int) $r->employees] + $figures($r))->all();
+
+        $withoutEntitlement = (int) DB::table('employees as e')->whereNull('e.deleted_at')->where('e.employment_status', 'Active')
+            ->when($request->filled('department_id'), fn ($q) => $q->where('e.department_id', $request->integer('department_id')))
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('e.id', $request->integer('employee_id')))
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('leave_entitlements as x')->whereColumn('x.employee_id', 'e.id')->where('x.leave_year', $year))
+            ->count();
+
+        $out = [
+            'year' => $year,
+            'configured' => (int) $total->entitlements > 0,
+            'summary' => (int) $total->entitlements > 0 ? ($figures($total) + ['employees' => (int) $total->employees]) : null,
+            'employees_without_entitlement' => $withoutEntitlement,
+            'by_type' => $byType,
+            'by_department' => $byDepartment,
+        ];
+
+        if ($withBalances) {
+            $rows = $base()
+                ->selectRaw("le.id as id, le.employee_id as employee_id, e.employee_code as employee_code, CONCAT(e.first_name, ' ', e.last_name) as name, e.department_id as department_id, lp.code as leave_type, lp.name as leave_type_name, le.entitled_days as entitled, COALESCE(u.approved, 0) as approved, COALESCE(u.pending, 0) as pending")
+                ->orderBy('e.employee_code')->orderBy('lp.name');
+
+            $deptNames = DB::table('departments')->pluck('name', 'id');
+            $map = fn ($r) => [
+                'id' => $r->id,
+                'employee_id' => $r->employee_id,
+                'employee_code' => $r->employee_code,
+                'name' => $r->name,
+                'department' => $deptNames[$r->department_id] ?? null,
+                'leave_type' => $r->leave_type,
+                'leave_type_name' => $r->leave_type_name,
+                'entitled_days' => (float) $r->entitled,
+                'approved_days' => (float) $r->approved,
+                'pending_days' => (float) $r->pending,
+                'remaining_days' => round((float) $r->entitled - (float) $r->approved, 2),
+            ];
+
+            // Its own page parameter so it never fights the request table's `page`.
+            $out['balances'] = $paginated
+                ? $rows->paginate($request->integer('per_page', 20), ['*'], 'balance_page')->through($map)
+                : $rows->get()->map($map);
+        }
+
+        return $out;
+    }
+
+    // ------------------------------------------------------------------
+    // Holidays (SQL over the holiday calendar)
+    // ------------------------------------------------------------------
+
+    /** @return array<string, mixed> */
+    public function holidays(Request $request): array
+    {
+        [$from, $to] = $this->range($request, self::MAX_AGGREGATE_RANGE, 365);
+
+        $rows = DB::table('holidays')
+            ->whereBetween('holiday_date', [$from->toDateString(), $to->toDateString()])
+            ->when($request->filled('status'), fn ($q) => $q->where('is_active', $request->string('status')->toString() === 'active'))
+            ->orderBy('holiday_date')
+            ->get(['id', 'name', 'holiday_date', 'description', 'is_active']);
+
+        $list = $rows->map(fn ($h) => [
+            'id' => $h->id,
+            'name' => $h->name,
+            'holiday_date' => $h->holiday_date,
+            'weekday' => Carbon::createFromFormat('Y-m-d', $h->holiday_date)->englishDayOfWeek,
+            'description' => $h->description,
+            'is_active' => (bool) $h->is_active,
+        ]);
+
+        $byMonth = [];
+        for ($m = $from->copy()->startOfMonth(); $m->lte($to); $m->addMonth()) {
+            $key = $m->format('Y-m');
+            $byMonth[] = ['month' => $key, 'count' => $list->where('is_active', true)->filter(fn ($h) => str_starts_with($h['holiday_date'], $key))->count()];
+        }
+
+        return [
+            'from_date' => $from->toDateString(),
+            'to_date' => $to->toDateString(),
+            'summary' => [
+                'total' => $list->count(),
+                'active' => $list->where('is_active', true)->count(),
+                'inactive' => $list->where('is_active', false)->count(),
+            ],
+            'by_month' => $byMonth,
+            'holidays' => $list->values()->all(),
+            'note' => 'Only active holidays affect leave-day counting and attendance. The monthly chart counts active holidays.',
         ];
     }
 
@@ -501,6 +638,7 @@ class ReportService
                 'absent' => $c['absent'],
                 'leave_days_attendance' => $c['leave'],
                 'weekly_off' => $c['weekly_off'],
+                'holiday' => $c['holiday'],
                 'attendance_percentage' => $this->percentage($c),
                 'approved_leave_days' => (float) ($leave[$d->id] ?? 0),
             ];
@@ -551,7 +689,8 @@ class ReportService
         $joiners = (int) (clone $employees)->whereBetween('joining_date', [$start->toDateString(), $end->toDateString()])->count();
 
         $attendance = $this->attendance($sub);
-        $leave = $this->leave($sub, false);
+        $leave = $this->leave($sub, false, false);
+        $holidays = $this->holidays($sub);
         $departments = $this->departments($sub, $withPayroll);
 
         $out = [
@@ -565,11 +704,12 @@ class ReportService
             ],
             'attendance' => $attendance['summary'],
             'leave' => $leave['summary'],
+            'entitlements' => $leave['entitlements'],
+            'holidays' => ['active' => $holidays['summary']['active'], 'list' => array_values(array_filter($holidays['holidays'], fn ($h) => $h['is_active']))],
             'departments' => $departments['departments'],
             'includes_payroll' => $withPayroll,
             'unavailable' => [
                 'opening_workforce' => self::UNAVAILABLE['opening_workforce'],
-                'leave_entitlement' => self::UNAVAILABLE['leave_entitlement'],
             ],
         ];
 
@@ -594,7 +734,12 @@ class ReportService
     {
         $workforce = $this->workforce($request);
         $attendance = $this->attendance($request);
-        $leave = $this->leave($request, false);
+        $leave = $this->leave($request, false, false);
+        // Same window as the attendance figures above (the request may carry no dates at all).
+        $holidays = $this->holidays(Request::create('/', 'GET', [
+            'from_date' => $attendance['from_date'],
+            'to_date' => $attendance['to_date'],
+        ]));
 
         $out = [
             'from_date' => $attendance['from_date'],
@@ -606,8 +751,9 @@ class ReportService
                 'pending_leave_days' => $attendance['summary']['pending_leave_days'],
             ],
             'leave' => $leave['summary'],
+            'entitlements' => ['year' => $leave['entitlements']['year'], 'configured' => $leave['entitlements']['configured'], 'summary' => $leave['entitlements']['summary'], 'employees_without_entitlement' => $leave['entitlements']['employees_without_entitlement']],
+            'holidays' => $holidays['summary'],
             'includes_payroll' => $withPayroll,
-            'unavailable' => ['leave_entitlement' => self::UNAVAILABLE['leave_entitlement'], 'holidays' => self::UNAVAILABLE['holidays']],
         ];
 
         if ($withPayroll) {

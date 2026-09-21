@@ -152,6 +152,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
       { label: "Work Schedules", href: "/masters/work-schedules", module: MENU_MODULES.WORK_SCHEDULES },
       { label: "Shifts", href: "/masters/shifts", module: MENU_MODULES.SHIFTS },
       { label: "Weekly Offs", href: "/masters/weekly-offs", module: MENU_MODULES.WEEKLY_OFFS },
+      { label: "Leave Entitlements", href: "/masters/leave-entitlements", module: MENU_MODULES.LEAVE_ENTITLEMENTS },
+      { label: "Holidays", href: "/masters/holidays", module: MENU_MODULES.HOLIDAYS },
       { label: "Late Policies", href: "/masters/late-policies", module: MENU_MODULES.LATE_POLICIES },
       { label: "Overtime Policies", href: "/masters/overtime-policies", module: MENU_MODULES.OVERTIME_POLICIES },
       { label: "Onboarding Checklists", href: "/masters/onboarding-checklists", module: MENU_MODULES.ONBOARDING_CHECKLISTS },

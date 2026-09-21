@@ -26,7 +26,8 @@ class ReportFilterRequest extends FormRequest
             'workforce' => ['Onboarding', 'Active', 'Inactive', 'Invited', 'On Leave', 'Terminated'],
             'leave' => ['pending', 'approved', 'rejected', 'cancelled'],
             'payroll' => ['draft', 'processed', 'paid', 'cancelled'],
-            'attendance', 'absence' => ['present', 'absent', 'leave', 'weekly_off', 'upcoming'],
+            'attendance', 'absence' => ['present', 'absent', 'leave', 'weekly_off', 'holiday', 'upcoming'],
+            'holidays' => ['active', 'inactive'],
             default => [],
         };
     }

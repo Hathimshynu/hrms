@@ -13,6 +13,7 @@ import { ApplyLeaveDialog } from "./components/ApplyLeaveDialog";
 import { LeaveBalanceCards } from "./components/LeaveBalanceCards";
 import { LeaveReview } from "./components/LeaveReview";
 import { MyLeaves } from "./components/MyLeaves";
+import { UpcomingHolidays } from "./components/UpcomingHolidays";
 
 export default function LeavePage() {
   const own = usePermission(MENU_MODULES.LEAVES);
@@ -95,6 +96,7 @@ export default function LeavePage() {
         {profile === "linked" && (
           <>
             <LeaveBalanceCards balance={balance} isLoading={isBalanceLoading} error={balanceError} />
+            <UpcomingHolidays />
             <MyLeaves
               types={types}
               refreshKey={refreshKey}

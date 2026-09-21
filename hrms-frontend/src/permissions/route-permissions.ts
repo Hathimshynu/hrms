@@ -71,6 +71,8 @@ export const ROUTE_MODULE_MAP: Record<string, MenuModuleKey> = {
   "/masters/work-schedules": MENU_MODULES.WORK_SCHEDULES,
   "/masters/shifts": MENU_MODULES.SHIFTS,
   "/masters/weekly-offs": MENU_MODULES.WEEKLY_OFFS,
+  "/masters/leave-entitlements": MENU_MODULES.LEAVE_ENTITLEMENTS,
+  "/masters/holidays": MENU_MODULES.HOLIDAYS,
   "/masters/late-policies": MENU_MODULES.LATE_POLICIES,
   "/masters/overtime-policies": MENU_MODULES.OVERTIME_POLICIES,
   "/masters/onboarding-checklists": MENU_MODULES.ONBOARDING_CHECKLISTS,

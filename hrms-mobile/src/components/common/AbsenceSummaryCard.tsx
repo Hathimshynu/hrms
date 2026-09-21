@@ -10,7 +10,7 @@ import { Card } from "./Card";
 import { LoadingView } from "./LoadingView";
 import { StatusPill } from "./StatusPill";
 
-const ORDER: AbsenceStatus[] = ["present", "absent", "leave", "weekly_off", "upcoming"];
+const ORDER: AbsenceStatus[] = ["present", "absent", "leave", "weekly_off", "holiday", "upcoming"];
 
 function lastDay(year: number, month: number): number {
   return new Date(year, month, 0).getDate(); // month is 1-based here

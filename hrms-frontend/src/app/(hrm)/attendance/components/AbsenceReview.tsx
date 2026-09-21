@@ -166,7 +166,7 @@ export function AbsenceReview() {
       {data && (
         <p className="text-xs text-muted">
           {ABSENCE_LABELS.present}: {data.summary.present} · {ABSENCE_LABELS.absent}: {data.summary.absent} ·{" "}
-          {ABSENCE_LABELS.leave}: {data.summary.leave} · {ABSENCE_LABELS.weekly_off}: {data.summary.weekly_off}
+          {ABSENCE_LABELS.leave}: {data.summary.leave} · {ABSENCE_LABELS.weekly_off}: {data.summary.weekly_off} · {ABSENCE_LABELS.holiday}: {data.summary.holiday}
           {" "}(employee-days in range, active employees)
         </p>
       )}

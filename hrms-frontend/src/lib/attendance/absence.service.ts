@@ -1,18 +1,19 @@
 // src/lib/attendance/absence.service.ts
 //
 // Absence is derived server-side (AbsenceCalculationService); nothing is
-// stored. Holidays are not represented in the schema, so there is no
-// "holiday" status.
+// stored. Holidays come from the holiday calendar (only active holidays) and
+// show as the "holiday" status; recorded attendance still wins over a holiday.
 import { api } from "../api/axios";
 import type { Paginated } from "../leave/leave.types";
 
-export type AbsenceStatus = "present" | "absent" | "leave" | "weekly_off" | "upcoming";
+export type AbsenceStatus = "present" | "absent" | "leave" | "weekly_off" | "holiday" | "upcoming";
 
 export interface AbsenceSummary {
   present: number;
   absent: number;
   leave: number;
   weekly_off: number;
+  holiday: number;
   upcoming: number;
 }
 
@@ -74,5 +75,6 @@ export const ABSENCE_LABELS: Record<AbsenceStatus, string> = {
   absent: "Absent",
   leave: "On Leave",
   weekly_off: "Week Off",
+  holiday: "Holiday",
   upcoming: "Upcoming",
 };

@@ -25,6 +25,8 @@ import {
   type AttendanceReport,
   type DepartmentRow,
   type DepartmentsReport,
+  type EntitlementBalanceRow,
+  type HolidayReport,
   type LeaveReport,
   type MonthlyReport,
   type PayrollReport,
@@ -42,18 +44,20 @@ const TABS: { id: ReportTab; label: string; payroll?: boolean }[] = [
   { id: "attendance", label: "Attendance" },
   { id: "absence", label: "Absence" },
   { id: "leave", label: "Leave" },
+  { id: "holidays", label: "Holidays" },
   { id: "payroll", label: "Payroll", payroll: true },
   { id: "departments", label: "Departments" },
   { id: "monthly", label: "Monthly summary" },
 ];
 
 const DAY_TABS: ReportTab[] = ["overview", "attendance", "absence", "departments"]; // day-by-day, max 92 days
-const DATE_TABS: ReportTab[] = ["overview", "workforce", "attendance", "absence", "leave", "departments"];
+const DATE_TABS: ReportTab[] = ["overview", "workforce", "attendance", "absence", "leave", "holidays", "departments"];
 const EMPLOYEE_TABS: ReportTab[] = ["attendance", "absence", "leave", "payroll"];
 const STATUS_OPTIONS: Partial<Record<ReportTab, { label: string; value: string }[]>> = {
   workforce: ["Active", "Inactive", "Onboarding", "Invited", "On Leave", "Terminated"].map((v) => ({ label: v, value: v })),
-  attendance: [["present", "Present"], ["absent", "Absent"], ["leave", "Approved leave"], ["weekly_off", "Weekly off"], ["upcoming", "Upcoming"]].map(([value, label]) => ({ label, value })),
-  absence: [["present", "Present"], ["absent", "Absent"], ["leave", "Approved leave"], ["weekly_off", "Weekly off"], ["upcoming", "Upcoming"]].map(([value, label]) => ({ label, value })),
+  attendance: [["present", "Present"], ["absent", "Absent"], ["leave", "Approved leave"], ["weekly_off", "Weekly off"], ["holiday", "Holiday"], ["upcoming", "Upcoming"]].map(([value, label]) => ({ label, value })),
+  absence: [["present", "Present"], ["absent", "Absent"], ["leave", "Approved leave"], ["weekly_off", "Weekly off"], ["holiday", "Holiday"], ["upcoming", "Upcoming"]].map(([value, label]) => ({ label, value })),
+  holidays: [{ label: "Active", value: "active" }, { label: "Inactive", value: "inactive" }],
   leave: ["pending", "approved", "rejected", "cancelled"].map((v) => ({ label: v[0].toUpperCase() + v.slice(1), value: v })),
   payroll: [{ label: "Draft", value: "draft" }, { label: "Processed", value: "processed" }],
 };
@@ -108,6 +112,7 @@ export default function ReportsPage() {
   const [status, setStatus] = React.useState("");
   const [leaveType, setLeaveType] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [balancePage, setBalancePage] = React.useState(1);
   const [sortBy, setSortBy] = React.useState<string | undefined>();
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
 
@@ -170,17 +175,19 @@ export default function ReportsPage() {
   );
   const workforce = useReportData((s) => reportsService.workforce(filters, s), ok && tab === "workforce", [fkey]);
   const attendance = useReportData((s) => (tab === "absence" ? reportsService.absence(paged, s) : reportsService.attendance(paged, s)), ok && (tab === "attendance" || tab === "absence"), [fkey, page, sortBy, sortDir, tab]);
-  const leave = useReportData((s) => reportsService.leave(paged, s), ok && tab === "leave", [fkey, page, sortBy, sortDir]);
+  const leave = useReportData((s) => reportsService.leave({ ...paged, balance_page: balancePage }, s), ok && tab === "leave", [fkey, page, sortBy, sortDir, balancePage]);
+  const holidays = useReportData((s) => reportsService.holidays(filters, s), ok && tab === "holidays", [fkey]);
   const payroll = useReportData((s) => reportsService.payroll(paged, s), ok && tab === "payroll" && canPayroll, [fkey, page, sortBy, sortDir, canPayroll]);
   const depts = useReportData((s) => reportsService.departments(filters, s), ok && tab === "departments", [fkey]);
   const monthly = useReportData((s) => reportsService.monthly(filters, s), ok && tab === "monthly", [fkey]);
 
-  const active = { overview, workforce, attendance, absence: attendance, leave, payroll, departments: depts, monthly }[tab] as State<unknown> & { reload: () => void };
+  const active = { overview, workforce, attendance, absence: attendance, leave, holidays, payroll, departments: depts, monthly }[tab] as State<unknown> & { reload: () => void };
 
   const selectTab = (id: ReportTab) => {
     setTab(id);
     setStatus("");
     setPage(1);
+    setBalancePage(1);
     setSortBy(undefined);
   };
   const onSort = (key: string) => {
@@ -194,6 +201,7 @@ export default function ReportsPage() {
   const onFilter = (fn: () => void) => {
     fn();
     setPage(1);
+    setBalancePage(1);
   };
 
   const visibleTabs = TABS.filter((t) => !t.payroll || canPayroll);
@@ -224,10 +232,20 @@ export default function ReportsPage() {
             </div>
           </div>
           {canExport && !filterError && (
-            <ExportMenu
-              label={`${TABS.find((t) => t.id === exportable)?.label ?? "report"} report`}
-              onExport={(format) => downloadServerExport(`/reports/export/${exportable}`, filters as Record<string, string | number | undefined>, format, `report-${exportable}`)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              {tab === "leave" && (
+                <ExportMenu
+                  label="Entitlement balances"
+                  onExport={(format) =>
+                    downloadServerExport("/reports/export/leave-balances", { ...(filters as Record<string, string | number | undefined>), year: Number(toDate.slice(0, 4)) }, format, "report-leave-balances")
+                  }
+                />
+              )}
+              <ExportMenu
+                label={`${TABS.find((t) => t.id === exportable)?.label ?? "report"} report`}
+                onExport={(format) => downloadServerExport(`/reports/export/${exportable}`, filters as Record<string, string | number | undefined>, format, `report-${exportable}`)}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -317,7 +335,8 @@ export default function ReportsPage() {
           {!filterError && !active.error && !active.loading && (tab === "attendance" || tab === "absence") && attendance.data && (
             <Attendance d={attendance.data} absence={tab === "absence"} page={page} onPage={setPage} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
           )}
-          {!filterError && !active.error && !active.loading && tab === "leave" && leave.data && <Leave d={leave.data} page={page} onPage={setPage} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
+          {!filterError && !active.error && !active.loading && tab === "leave" && leave.data && <Leave d={leave.data} page={page} onPage={setPage} sortBy={sortBy} sortDir={sortDir} onSort={onSort} balancePage={balancePage} onBalancePage={setBalancePage} />}
+          {!filterError && !active.error && !active.loading && tab === "holidays" && holidays.data && <Holidays d={holidays.data} />}
           {!filterError && !active.error && !active.loading && tab === "payroll" && payroll.data && <Payroll d={payroll.data} page={page} onPage={setPage} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />}
           {!filterError && !active.error && !active.loading && tab === "departments" && depts.data && <Departments d={depts.data} />}
           {!filterError && !active.error && !active.loading && tab === "monthly" && monthly.data && <Monthly d={monthly.data} />}
@@ -354,6 +373,7 @@ const deptColumns = (payroll: boolean): Column<DepartmentRow>[] => [
   { key: "active", header: "Active", align: "right", render: (r) => n0(r.active_employees) },
   { key: "present", header: "Present days", align: "right", render: (r) => n0(r.present) },
   { key: "absent", header: "Absent days", align: "right", render: (r) => n0(r.absent) },
+  { key: "holiday", header: "Holiday days", align: "right", render: (r) => n0(r.holiday) },
   { key: "pct", header: "Attendance", align: "right", render: (r) => pct(r.attendance_percentage) },
   { key: "leave", header: "Approved leave days", align: "right", render: (r) => n0(r.approved_leave_days) },
   ...(payroll
@@ -375,19 +395,20 @@ function DepartmentTable({ d, title = "Department analytics" }: { d: Departments
 
 function AttendanceCards({ s }: { s: AttendanceReport["summary"] }) {
   return (
-    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
       <StatCard label="Attendance rate" value={pct(s.attendance_percentage)} hint="present ÷ (present + absent)" />
       <StatCard label="Present days" value={n0(s.present)} />
       <StatCard label="Absent days" value={n0(s.absent)} hint={s.pending_leave_days ? `${n0(s.pending_leave_days)} with leave pending` : undefined} />
       <StatCard label="Approved leave days" value={n0(s.leave)} />
       <StatCard label="Weekly-off days" value={n0(s.weekly_off)} />
+      <StatCard label="Holiday days" value={n0(s.holiday)} hint="not counted in attendance rate" />
       <StatCard label="Upcoming days" value={n0(s.upcoming)} />
     </dl>
   );
 }
 
 function dailyData(d: AttendanceReport) {
-  return d.daily.map((x) => ({ date: x.date, present: x.present, absent: x.absent, leave: x.leave, weekly_off: x.weekly_off, upcoming: x.upcoming }));
+  return d.daily.map((x) => ({ date: x.date, present: x.present, absent: x.absent, leave: x.leave, weekly_off: x.weekly_off, holiday: x.holiday, upcoming: x.upcoming }));
 }
 
 function Overview({ d }: { d: { summary: SummaryReport; attendance: AttendanceReport; leave: LeaveReport; workforce: WorkforceReport; depts: DepartmentsReport; payroll: PayrollReport | null } }) {
@@ -401,6 +422,12 @@ function Overview({ d }: { d: { summary: SummaryReport; attendance: AttendanceRe
         <StatCard label="Absent days" value={n0(s.absence.absent)} hint={s.absence.pending_leave_days ? `${n0(s.absence.pending_leave_days)} with leave pending` : "no pending leave"} />
         {s.payroll ? <StatCard label="Net payroll" value={money(s.payroll.net_salary)} hint={`${n0(s.payroll.records)} records · gross ${money(s.payroll.gross_salary)}`} /> : <StatCard label="Payroll" value="Restricted" hint="Requires payroll access" />}
       </dl>
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Leave entitlements and holidays">
+        <StatCard label="Holidays in period" value={n0(s.holidays.active)} hint={s.holidays.inactive ? `${n0(s.holidays.inactive)} inactive not counted` : "active holidays"} />
+        <StatCard label={`Entitled days ${s.entitlements.year}`} value={s.entitlements.summary ? n0(s.entitlements.summary.entitled_days) : "Not configured"} hint={s.entitlements.summary ? `${n0(s.entitlements.summary.employees)} employee(s)` : "no entitlements set for this year"} />
+        <StatCard label="Remaining entitlement" value={s.entitlements.summary ? n0(s.entitlements.summary.remaining_days) : "Not configured"} hint={s.entitlements.summary ? "entitled − approved" : undefined} />
+        <StatCard label="Employees without entitlement" value={n0(s.entitlements.employees_without_entitlement)} hint={`active employees, ${s.entitlements.year}`} />
+      </dl>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Section title="Daily attendance" description={range(d.attendance.from_date, d.attendance.to_date)}>
@@ -411,7 +438,7 @@ function Overview({ d }: { d: { summary: SummaryReport; attendance: AttendanceRe
             xKey="date"
             xHeader="Date"
             formatX={(v) => formatDate(v)}
-            series={[SERIES.present, SERIES.absent, SERIES.leave, SERIES.weekly_off, SERIES.upcoming]}
+            series={[SERIES.present, SERIES.absent, SERIES.leave, SERIES.weekly_off, SERIES.holiday, SERIES.upcoming]}
             stacked
             emptyMessage="No attendance data for these filters."
           />
@@ -431,8 +458,8 @@ function Overview({ d }: { d: { summary: SummaryReport; attendance: AttendanceRe
         <Section title="Absence breakdown" description="Employee-days by status in the selected dates.">
           <ChartBlock
             title="Day status totals"
-            summary={`Present ${n0(s.attendance.present)}, absent ${n0(s.attendance.absent)}, approved leave ${n0(s.attendance.leave)}, weekly off ${n0(s.attendance.weekly_off)}, upcoming ${n0(s.attendance.upcoming)}.`}
-            data={[{ status: "Present", days: s.attendance.present }, { status: "Absent", days: s.attendance.absent }, { status: "Approved leave", days: s.attendance.leave }, { status: "Weekly off", days: s.attendance.weekly_off }, { status: "Upcoming", days: s.attendance.upcoming }]}
+            summary={`Present ${n0(s.attendance.present)}, absent ${n0(s.attendance.absent)}, approved leave ${n0(s.attendance.leave)}, weekly off ${n0(s.attendance.weekly_off)}, holiday ${n0(s.attendance.holiday)}, upcoming ${n0(s.attendance.upcoming)}.`}
+            data={[{ status: "Present", days: s.attendance.present }, { status: "Absent", days: s.attendance.absent }, { status: "Approved leave", days: s.attendance.leave }, { status: "Weekly off", days: s.attendance.weekly_off }, { status: "Holiday", days: s.attendance.holiday }, { status: "Upcoming", days: s.attendance.upcoming }]}
             xKey="status"
             xHeader="Status"
             series={[{ key: "days", label: "Employee-days", color: "#4f6ef7" }]}
@@ -472,7 +499,6 @@ function Overview({ d }: { d: { summary: SummaryReport; attendance: AttendanceRe
       </div>
 
       <DepartmentTable d={d.depts} />
-      <Unavailable items={s.unavailable} />
     </>
   );
 }
@@ -538,6 +564,7 @@ function Attendance({ d, absence, ...t }: { d: AttendanceReport; absence: boolea
     { key: "absent", header: "Absent", sortKey: "absent", align: "right", render: (r) => n0(r.absent) },
     { key: "leave", header: "Approved leave", sortKey: "leave", align: "right", render: (r) => n0(r.leave) },
     { key: "wo", header: "Week off", sortKey: "weekly_off", align: "right", render: (r) => n0(r.weekly_off) },
+    { key: "hol", header: "Holiday", sortKey: "holiday", align: "right", render: (r) => n0(r.holiday) },
     { key: "pl", header: "Leave pending", sortKey: "pending_leave_days", align: "right", render: (r) => (r.pending_leave_days ? `${r.pending_leave_days} day(s)` : "—") },
     { key: "pct", header: "Attendance", sortKey: "attendance_percentage", align: "right", render: (r) => pct(r.attendance_percentage) },
   ];
@@ -557,12 +584,12 @@ function Attendance({ d, absence, ...t }: { d: AttendanceReport; absence: boolea
       <Section title={absence ? "Daily absence trend" : "Daily attendance trend"} description={range(d.from_date, d.to_date)}>
         <ChartBlock
           title="Daily status"
-          summary={`${n0(d.summary.present)} present, ${n0(d.summary.absent)} absent, ${n0(d.summary.leave)} approved leave, ${n0(d.summary.weekly_off)} weekly off.`}
+          summary={`${n0(d.summary.present)} present, ${n0(d.summary.absent)} absent, ${n0(d.summary.leave)} approved leave, ${n0(d.summary.weekly_off)} weekly off, ${n0(d.summary.holiday)} holiday.`}
           data={dailyData(d)}
           xKey="date"
           xHeader="Date"
           formatX={(v) => formatDate(v)}
-          series={[SERIES.present, SERIES.absent, SERIES.leave, SERIES.weekly_off, SERIES.upcoming]}
+          series={[SERIES.present, SERIES.absent, SERIES.leave, SERIES.weekly_off, SERIES.holiday, SERIES.upcoming]}
           stacked
           emptyMessage="No attendance data for these filters."
         />
@@ -576,6 +603,7 @@ function Attendance({ d, absence, ...t }: { d: AttendanceReport; absence: boolea
             { key: "absent", header: "Absent", align: "right", render: (r) => n0(r.absent) },
             { key: "leave", header: "Approved leave", align: "right", render: (r) => n0(r.leave) },
             { key: "wo", header: "Week off", align: "right", render: (r) => n0(r.weekly_off) },
+            { key: "hol", header: "Holiday", align: "right", render: (r) => n0(r.holiday) },
             { key: "pct", header: "Attendance", align: "right", render: (r) => pct(r.attendance_percentage) },
           ]}
           rows={d.by_department}
@@ -586,12 +614,11 @@ function Attendance({ d, absence, ...t }: { d: AttendanceReport; absence: boolea
         <DataGrid caption="Employee summary" columns={cols} rows={d.employees.data} rowKey={(r) => r.employee_id} sortBy={t.sortBy ?? (absence ? "absent" : "name")} sortDir={t.sortBy ? t.sortDir : absence ? "desc" : "asc"} onSort={t.onSort} />
         <Pager page={t.page} lastPage={d.employees.last_page} onPage={t.onPage} />
       </Section>
-      <Unavailable items={d.unavailable} />
     </>
   );
 }
 
-function Leave({ d, ...t }: { d: LeaveReport } & Sortable) {
+function Leave({ d, balancePage, onBalancePage, ...t }: { d: LeaveReport; balancePage: number; onBalancePage: (p: number) => void } & Sortable) {
   const s = d.summary;
   const cols: Column<LeaveReport["employees"]["data"][number]>[] = [
     { key: "code", header: "Code", sortKey: "employee_code", render: (r) => r.employee_code ?? "—" },
@@ -640,7 +667,125 @@ function Leave({ d, ...t }: { d: LeaveReport } & Sortable) {
         <DataGrid caption="Employee leave summary" columns={cols} rows={d.employees.data} rowKey={(r) => r.employee_id} sortBy={t.sortBy ?? "approved_days"} sortDir={t.sortBy ? t.sortDir : "desc"} onSort={t.onSort} emptyMessage="No leave requests match these filters." />
         <Pager page={t.page} lastPage={d.employees.last_page} onPage={t.onPage} />
       </Section>
-      <Unavailable items={d.unavailable} />
+      <Entitlements e={d.entitlements} page={balancePage} onPage={onBalancePage} />
+    </>
+  );
+}
+
+const noDash = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+
+/** Entitlement figures exist only where an entitlement was configured; nothing is shown as zero otherwise. */
+function Entitlements({ e, page, onPage }: { e: LeaveReport["entitlements"]; page: number; onPage: (p: number) => void }) {
+  if (!e.configured || !e.summary) {
+    return (
+      <Section title={`Leave entitlements — ${e.year}`} description="The entitlement year is the year of the To date.">
+        <p role="status" className="rounded-xl border border-dashed border-border bg-surface px-4 py-6 text-center text-sm text-ink-soft">
+          Not configured. No leave entitlements have been set for {e.year} with these filters, so allocation and remaining balance cannot be reported.
+          {e.employees_without_entitlement > 0 && ` ${n0(e.employees_without_entitlement)} active employee(s) have no entitlement.`}
+        </p>
+      </Section>
+    );
+  }
+  const s = e.summary;
+  const figureCols = <T extends { entitled_days: number; approved_days: number; pending_days: number; remaining_days: number }>(): Column<T>[] => [
+    { key: "entitled", header: "Entitled", align: "right", render: (r) => noDash(r.entitled_days) },
+    { key: "approved", header: "Approved", align: "right", render: (r) => noDash(r.approved_days) },
+    { key: "pending", header: "Pending", align: "right", render: (r) => noDash(r.pending_days) },
+    { key: "remaining", header: "Remaining", align: "right", render: (r) => noDash(r.remaining_days) },
+  ];
+  return (
+    <>
+      <Section title={`Leave entitlements — ${e.year}`} description="Only employees with a configured entitlement are included. Remaining = entitled − approved days. The entitlement year is the year of the To date.">
+        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <StatCard label="Employees with entitlement" value={n0(s.employees)} hint={`${n0(s.entitlements)} allocation(s)`} />
+          <StatCard label="Entitled days" value={noDash(s.entitled_days)} />
+          <StatCard label="Approved days" value={noDash(s.approved_days)} />
+          <StatCard label="Pending days" value={noDash(s.pending_days)} />
+          <StatCard label="Remaining days" value={noDash(s.remaining_days)} />
+        </dl>
+        {e.employees_without_entitlement > 0 && <p className="text-xs text-muted">{n0(e.employees_without_entitlement)} active employee(s) have no entitlement for {e.year} and are not included.</p>}
+      </Section>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Section title="Entitlement by leave type">
+          <ChartBlock
+            title="Entitlement usage by leave type"
+            summary={e.by_type.map((x) => `${x.name}: ${noDash(x.entitled_days)} entitled, ${noDash(x.approved_days)} approved, ${noDash(x.remaining_days)} remaining`).join("; ")}
+            data={e.by_type.map((x) => ({ name: x.name, approved: x.approved_days, remaining: Math.max(x.remaining_days, 0) }))}
+            xKey="name"
+            xHeader="Leave type"
+            series={[{ key: "approved", label: "Approved", color: "#10b981" }, { key: "remaining", label: "Remaining", color: "#94a3b8" }]}
+            stacked
+            height={240}
+            emptyMessage="No entitlements."
+          />
+        </Section>
+        <Section title="Entitlement by department">
+          <DataGrid
+            caption="Entitlement by department"
+            columns={[{ key: "name", header: "Department", render: (r: LeaveReport["entitlements"]["by_department"][number]) => r.name }, { key: "emp", header: "Employees", align: "right", render: (r) => n0(r.employees) }, ...figureCols<LeaveReport["entitlements"]["by_department"][number]>()]}
+            rows={e.by_department}
+            rowKey={(r) => r.name}
+          />
+        </Section>
+      </div>
+      {e.balances && (
+        <Section title="Employee leave balances" description={`${n0(e.balances.total)} allocation(s) for ${e.year}.`}>
+          <DataGrid
+            caption="Employee leave balances"
+            columns={[
+              { key: "code", header: "Code", render: (r: EntitlementBalanceRow) => r.employee_code ?? "—" },
+              { key: "name", header: "Employee", render: (r) => r.name },
+              { key: "dept", header: "Department", render: (r) => r.department ?? "—" },
+              { key: "type", header: "Leave type", render: (r) => r.leave_type_name },
+              ...figureCols<EntitlementBalanceRow>(),
+            ]}
+            rows={e.balances.data}
+            rowKey={(r) => r.id}
+            emptyMessage="No entitlements match these filters."
+          />
+          <Pager page={page} lastPage={e.balances.last_page} onPage={onPage} />
+        </Section>
+      )}
+    </>
+  );
+}
+
+function Holidays({ d }: { d: HolidayReport }) {
+  return (
+    <>
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <StatCard label="Holidays" value={n0(d.summary.total)} hint={range(d.from_date, d.to_date)} />
+        <StatCard label="Active" value={n0(d.summary.active)} hint="counted in leave and attendance" />
+        <StatCard label="Inactive" value={n0(d.summary.inactive)} hint="ignored" />
+      </dl>
+      <Section title="Holidays by month" description="Active holidays only.">
+        <ChartBlock
+          title="Active holidays by month"
+          summary={d.by_month.filter((m) => m.count > 0).map((m) => `${monthKeyLabel(m.month)} ${m.count}`).join(", ") || "No active holidays in this period."}
+          data={d.by_month}
+          xKey="month"
+          xHeader="Month"
+          formatX={monthKeyLabel}
+          series={[{ key: "count", label: "Holidays", color: "#ec4899" }]}
+          height={240}
+          emptyMessage="No holidays in this period."
+        />
+      </Section>
+      <Section title="Holiday calendar" description={d.note}>
+        <DataGrid
+          caption="Holiday calendar"
+          columns={[
+            { key: "date", header: "Date", render: (h: HolidayReport["holidays"][number]) => <span className="tabular-nums">{formatDate(h.holiday_date)}</span> },
+            { key: "day", header: "Day", render: (h) => h.weekday },
+            { key: "name", header: "Holiday", render: (h) => h.name },
+            { key: "desc", header: "Description", render: (h) => h.description ?? "—" },
+            { key: "status", header: "Status", render: (h) => (h.is_active ? "Active" : "Inactive") },
+          ]}
+          rows={d.holidays}
+          rowKey={(h) => h.id}
+          emptyMessage="No holidays are defined in this period."
+        />
+      </Section>
     </>
   );
 }
@@ -707,6 +852,8 @@ function Monthly({ d }: { d: MonthlyReport }) {
           <StatCard label="Present days" value={n0(d.attendance.present)} />
           <StatCard label="Absent days" value={n0(d.attendance.absent)} />
           <StatCard label="Approved leave days" value={n0(d.leave.approved_days)} hint={`${n0(d.leave.total_requests)} requests`} />
+          <StatCard label="Holidays" value={n0(d.holidays.active)} hint={d.holidays.list.map((h) => `${formatDate(h.holiday_date)} ${h.name}`).join(" · ") || "none this month"} />
+          <StatCard label={`Leave remaining ${d.entitlements.year}`} value={d.entitlements.summary ? n0(d.entitlements.summary.remaining_days) : "Not configured"} hint={d.entitlements.summary ? `${n0(d.entitlements.summary.entitled_days)} entitled · ${n0(d.entitlements.summary.approved_days)} approved` : "no entitlements set"} />
           {d.payroll ? <StatCard label="Net payroll" value={money(d.payroll.net_salary)} hint={`${n0(d.payroll.records)} records`} /> : <StatCard label="Payroll" value="Restricted" hint="Requires payroll access" />}
         </dl>
       </Section>

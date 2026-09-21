@@ -41,11 +41,17 @@ export interface LeaveTypeOption {
 export interface LeaveBalanceType {
   leave_type: string;
   name: string;
-  // The leave policy master stores no entitlement, so these stay null.
+  // false = no entitlement has been configured for this employee/type/year;
+  // allocated and available are then null (never 0).
+  configured: boolean;
   allocated: number | null;
+  // Approved days (kept as `used` for backward compatibility).
   used: number;
   pending: number;
+  // allocated - approved; null when not configured.
   available: number | null;
+  // allocated - approved - pending; null when not configured.
+  available_after_pending: number | null;
 }
 
 export interface LeaveBalance {

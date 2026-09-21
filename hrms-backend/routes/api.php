@@ -13,7 +13,9 @@ use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceRegularizationController;
 use App\Http\Controllers\Api\AbsenceController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\HolidayController;
 use App\Http\Controllers\Api\LeaveController;
+use App\Http\Controllers\Api\LeaveEntitlementController;
 use App\Http\Controllers\Api\PayrollController;
 use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\RoleController;
@@ -363,6 +365,7 @@ Route::middleware([
                 Route::get('/attendance', [ReportsController::class, 'attendance'])->name('reports.attendance');
                 Route::get('/absence', [ReportsController::class, 'absence'])->name('reports.absence');
                 Route::get('/leave', [ReportsController::class, 'leave'])->name('reports.leave');
+                Route::get('/holidays', [ReportsController::class, 'holidays'])->name('reports.holidays');
                 Route::get('/departments', [ReportsController::class, 'departments'])->name('reports.departments');
                 Route::get('/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
                 Route::get('/payroll', [ReportsController::class, 'payroll'])->middleware('permission:view payroll')->name('reports.payroll');
@@ -383,6 +386,7 @@ Route::middleware([
         Route::prefix('leaves')->group(function () {
             Route::get('/types', [LeaveController::class, 'types'])->middleware('permission:view leaves')->name('leaves.types');
             Route::get('/balance', [LeaveController::class, 'balance'])->middleware('permission:view leaves')->name('leaves.balance');
+            Route::get('/holidays', [HolidayController::class, 'upcoming'])->middleware('permission:view leaves')->name('leaves.holidays');
             Route::get('/admin/export', [LeaveController::class, 'adminExport'])->middleware('permission:approve leaves')->name('leaves.admin.export');
             Route::get('/admin', [LeaveController::class, 'adminIndex'])->middleware('permission:approve leaves')->name('leaves.admin');
             Route::get('/export', [LeaveController::class, 'export'])->middleware('permission:view leaves')->name('leaves.export');
@@ -393,6 +397,29 @@ Route::middleware([
             Route::post('/{leave}/cancel', [LeaveController::class, 'cancel'])->middleware('permission:edit leaves')->name('leaves.cancel');
             Route::post('/{leave}/approve', [LeaveController::class, 'approve'])->middleware('permission:approve leaves')->name('leaves.approve');
             Route::post('/{leave}/reject', [LeaveController::class, 'reject'])->middleware('permission:reject leaves')->name('leaves.reject');
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Leave entitlements (manual allocation per employee / leave type / year)
+        | and the global holiday calendar. Literal paths precede the {id} routes.
+        |--------------------------------------------------------------------------
+        */
+        Route::prefix('leave-entitlements')->group(function () {
+            Route::get('/options', [LeaveEntitlementController::class, 'options'])->middleware('permission:view leave entitlements')->name('leave-entitlements.options');
+            Route::get('/', [LeaveEntitlementController::class, 'index'])->middleware('permission:view leave entitlements')->name('leave-entitlements.index');
+            Route::post('/', [LeaveEntitlementController::class, 'store'])->middleware('permission:create leave entitlements')->name('leave-entitlements.store');
+            Route::get('/{leaveEntitlement}', [LeaveEntitlementController::class, 'show'])->middleware('permission:view leave entitlements')->name('leave-entitlements.show');
+            Route::match(['put', 'patch'], '/{leaveEntitlement}', [LeaveEntitlementController::class, 'update'])->middleware('permission:edit leave entitlements')->name('leave-entitlements.update');
+            Route::delete('/{leaveEntitlement}', [LeaveEntitlementController::class, 'destroy'])->middleware('permission:delete leave entitlements')->name('leave-entitlements.destroy');
+        });
+
+        Route::prefix('holidays')->group(function () {
+            Route::get('/', [HolidayController::class, 'index'])->middleware('permission:view holidays')->name('holidays.index');
+            Route::post('/', [HolidayController::class, 'store'])->middleware('permission:create holidays')->name('holidays.store');
+            Route::get('/{holiday}', [HolidayController::class, 'show'])->middleware('permission:view holidays')->name('holidays.show');
+            Route::match(['put', 'patch'], '/{holiday}', [HolidayController::class, 'update'])->middleware('permission:edit holidays')->name('holidays.update');
+            Route::delete('/{holiday}', [HolidayController::class, 'destroy'])->middleware('permission:delete holidays')->name('holidays.destroy');
         });
 
         /*

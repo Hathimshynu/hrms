@@ -19,7 +19,7 @@ use Illuminate\Support\Arr;
  */
 class ReportsController extends Controller
 {
-    private const REPORTS = ['workforce', 'attendance', 'absence', 'leave', 'payroll', 'departments', 'monthly'];
+    private const REPORTS = ['workforce', 'attendance', 'absence', 'leave', 'leave-balances', 'holidays', 'payroll', 'departments', 'monthly'];
 
     public function __construct(private readonly ReportService $reports) {}
 
@@ -58,6 +58,11 @@ class ReportsController extends Controller
         return $this->ok($this->reports->leave($request));
     }
 
+    public function holidays(ReportFilterRequest $request): JsonResponse
+    {
+        return $this->ok($this->reports->holidays($request));
+    }
+
     public function payroll(ReportFilterRequest $request): JsonResponse
     {
         $this->requirePayroll($request);
@@ -94,24 +99,47 @@ class ReportsController extends Controller
             case 'absence':
                 $data = $this->reports->attendance($request, $report === 'absence');
                 $rows = $data['_all_employees']->map(fn ($e) => [
-                    $e['employee_code'], $e['name'], $e['department'], $e['present'], $e['absent'], $e['leave'], $e['weekly_off'], $e['upcoming'],
+                    $e['employee_code'], $e['name'], $e['department'], $e['present'], $e['absent'], $e['leave'], $e['weekly_off'], $e['holiday'], $e['upcoming'],
                     $e['attendance_percentage'], $e['pending_leave_days'],
                 ]);
 
                 return TabularExport::download(
                     $report.'-'.$data['from_date'].'-to-'.$data['to_date'],
-                    ['Employee Code', 'Employee', 'Department', 'Present', 'Absent', 'Approved Leave', 'Week Off', 'Upcoming', 'Attendance %', 'Pending Leave Days'],
+                    ['Employee Code', 'Employee', 'Department', 'Present', 'Absent', 'Approved Leave', 'Week Off', 'Holiday', 'Upcoming', 'Attendance %', 'Pending Leave Days'],
                     $rows->all(),
                     $format,
                 );
 
             case 'leave':
-                $data = $this->reports->leave($request, false);
+                $data = $this->reports->leave($request, false, false);
                 $rows = $data['employees']->map(fn ($e) => [$e['employee_code'], $e['name'], $e['department'], $e['total'], $e['pending'], $e['approved'], $e['rejected'], $e['cancelled'], $e['approved_days']]);
 
                 return TabularExport::download(
                     'leave-'.$data['from_date'].'-to-'.$data['to_date'],
                     ['Employee Code', 'Employee', 'Department', 'Requests', 'Pending', 'Approved', 'Rejected', 'Cancelled', 'Approved Days'],
+                    $rows->all(),
+                    $format,
+                );
+
+            case 'leave-balances':
+                $year = $request->filled('year') ? $request->integer('year') : (int) now()->format('Y');
+                $data = $this->reports->entitlements($request, $year, false);
+                $rows = $data['balances']->map(fn ($b) => [$b['employee_code'], $b['name'], $b['department'], $b['leave_type_name'], $year, $b['entitled_days'], $b['approved_days'], $b['pending_days'], $b['remaining_days']]);
+
+                return TabularExport::download(
+                    'leave-balances-'.$year,
+                    ['Employee Code', 'Employee', 'Department', 'Leave Type', 'Year', 'Entitled Days', 'Approved Days', 'Pending Days', 'Remaining Days'],
+                    $rows->all(),
+                    $format,
+                );
+
+            case 'holidays':
+                $data = $this->reports->holidays($request);
+                $rows = collect($data['holidays'])->map(fn ($h) => [TabularExport::date($h['holiday_date']), $h['weekday'], $h['name'], $h['description'], $h['is_active'] ? 'Active' : 'Inactive']);
+
+                return TabularExport::download(
+                    'holidays-'.$data['from_date'].'-to-'.$data['to_date'],
+                    ['Date', 'Day', 'Holiday', 'Description', 'Status'],
                     $rows->all(),
                     $format,
                 );
@@ -135,12 +163,12 @@ class ReportsController extends Controller
                 $data = $report === 'monthly'
                     ? $this->reports->monthly($request, $withPayroll)
                     : $this->reports->departments($request, $withPayroll);
-                $headings = ['Department', 'Employees', 'Active Employees', 'Present', 'Absent', 'Approved Leave (attendance days)', 'Week Off', 'Attendance %', 'Approved Leave Days'];
+                $headings = ['Department', 'Employees', 'Active Employees', 'Present', 'Absent', 'Approved Leave (attendance days)', 'Week Off', 'Holiday', 'Attendance %', 'Approved Leave Days'];
                 if ($withPayroll) {
                     array_push($headings, 'Payroll Gross', 'Payroll Deductions', 'Payroll Net');
                 }
                 $rows = collect($data['departments'])->map(function ($d) use ($withPayroll) {
-                    $row = [$d['name'], $d['employees'], $d['active_employees'], $d['present'], $d['absent'], $d['leave_days_attendance'], $d['weekly_off'], $d['attendance_percentage'], $d['approved_leave_days']];
+                    $row = [$d['name'], $d['employees'], $d['active_employees'], $d['present'], $d['absent'], $d['leave_days_attendance'], $d['weekly_off'], $d['holiday'], $d['attendance_percentage'], $d['approved_leave_days']];
                     if ($withPayroll) {
                         array_push($row, $d['payroll_gross'], $d['payroll_deductions'], $d['payroll_net']);
                     }

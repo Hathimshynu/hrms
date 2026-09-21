@@ -127,7 +127,7 @@ export function ApplyLeaveDialog({ open, onOpenChange, types, onApplied }: Props
             />
 
             <p className="text-xs text-muted">
-              The number of days is calculated when you submit; your weekly offs are not counted.
+              The number of days is calculated when you submit; your weekly offs and company holidays are not counted. A leave entitlement must be configured for the leave type.
             </p>
           </div>
 

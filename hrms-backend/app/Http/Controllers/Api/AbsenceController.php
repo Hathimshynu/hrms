@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Absence is derived, never stored. See AbsenceCalculationService for the
- * status rules; holidays are not in the schema so no `holiday` status exists.
+ * status rules (including the `holiday` status from the holiday calendar).
  */
 class AbsenceController extends Controller
 {
@@ -45,7 +45,7 @@ class AbsenceController extends Controller
                 'employee' => $this->employeeSummary($employee),
                 'from_date' => $from->toDateString(),
                 'to_date' => $to->toDateString(),
-                'holiday_supported' => false,
+                'holiday_supported' => true,
                 'summary' => $this->summary($rows),
                 'days' => $rows->map(fn ($r) => [
                     'date' => $r['date'],
@@ -128,7 +128,7 @@ class AbsenceController extends Controller
                 'from_date' => $from->toDateString(),
                 'to_date' => $to->toDateString(),
                 'status' => $status,
-                'holiday_supported' => false,
+                'holiday_supported' => true,
                 'summary' => $summary,
                 'rows' => $paginator,
             ],
