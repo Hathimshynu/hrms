@@ -3,6 +3,8 @@
 import { format, startOfMonth } from "date-fns";
 import * as React from "react";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Button } from "@/src/components/ui/Button";
 import { StatusPill } from "@/src/components/ui/Datatable";
@@ -81,9 +83,24 @@ export function AbsenceReview() {
 
   return (
     <section className="grid gap-4 rounded-2xl border border-border bg-surface p-4 sm:p-6" aria-labelledby="absence-review-title">
-      <h2 id="absence-review-title" className="text-lg font-semibold text-ink">
-        Absence report
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="absence-review-title" className="text-lg font-semibold text-ink">
+          Absence report
+        </h2>
+        <ExportMenu
+          compact
+          label="absence report"
+          disabled={!fromDate || !toDate || toDate < fromDate}
+          onExport={(format) =>
+            downloadServerExport(
+              "/attendance/absence/admin/export",
+              { from_date: fromDate, to_date: toDate, status, department_id: departmentId, employee_id: employeeId },
+              format,
+              "absence",
+            )
+          }
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Input

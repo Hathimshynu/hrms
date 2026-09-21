@@ -7,6 +7,7 @@ use App\Http\Requests\Absence\AbsenceRangeRequest;
 use App\Models\Employee;
 use App\Services\AbsenceCalculationService;
 use App\Services\LeaveDayCalculator;
+use App\Support\Export\TabularExport;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,7 +60,87 @@ class AbsenceController extends Controller
      * Reviewer view across active employees. Rows are employee-days filtered
      * by status (default: absent) and paginated.
      */
+    /** Reviewer export: every row matching the same filters as the list (`edit attendance`). */
+    public function adminExport(AbsenceRangeRequest $request)
+    {
+        [$from, $to, $status, $filtered] = $this->adminRows($request);
+
+        $rows = $filtered->map(fn ($r) => [
+            $r['employee']['employee_code'],
+            $r['employee']['name'],
+            $r['department'],
+            TabularExport::date($r['date']),
+            AbsenceCalculationService::LABELS[$r['status']],
+            $r['pending_leave'] ? 'Yes' : '',
+        ])->all();
+
+        return TabularExport::download(
+            'absence-'.$from->toDateString().'-to-'.$to->toDateString(),
+            ['Employee Code', 'Employee', 'Department', 'Date', 'Status', 'Leave Request Pending'],
+            $rows,
+            $request->string('format', 'csv')->toString(),
+        );
+    }
+
+    /** The authenticated employee's own day-by-day status for the range. */
+    public function mineExport(AbsenceRangeRequest $request)
+    {
+        $employee = Employee::where('user_id', $request->user('api')->id)
+            ->first(['id', 'employee_code', 'first_name', 'last_name', 'joining_date', 'employment_status']);
+
+        if (! $employee) {
+            abort(404, 'Employee profile not found.');
+        }
+
+        [$from, $to] = $this->range($request, LeaveDayCalculator::MAX_RANGE_DAYS);
+
+        $rows = $this->absence->calculate(collect([$employee]), $from, $to)->map(fn ($r) => [
+            TabularExport::date($r['date']),
+            AbsenceCalculationService::LABELS[$r['status']],
+            $r['pending_leave'] ? 'Yes' : '',
+        ])->all();
+
+        return TabularExport::download(
+            'my-absence-'.$from->toDateString().'-to-'.$to->toDateString(),
+            ['Date', 'Status', 'Leave Request Pending'],
+            $rows,
+            $request->string('format', 'csv')->toString(),
+        );
+    }
+
     public function adminIndex(AbsenceRangeRequest $request): JsonResponse
+    {
+        [$from, $to, $status, $filtered, $summary] = $this->adminRows($request);
+
+        $perPage = $request->integer('per_page', 20);
+        $page = max(1, $request->integer('page', 1));
+
+        $paginator = new LengthAwarePaginator(
+            $filtered->forPage($page, $perPage)->values(),
+            $filtered->count(),
+            $perPage,
+            $page,
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'from_date' => $from->toDateString(),
+                'to_date' => $to->toDateString(),
+                'status' => $status,
+                'holiday_supported' => false,
+                'summary' => $summary,
+                'rows' => $paginator,
+            ],
+        ]);
+    }
+
+    /**
+     * Shared by the list and the export so both cover the identical dataset.
+     *
+     * @return array{0: Carbon, 1: Carbon, 2: string, 3: \Illuminate\Support\Collection, 4: array<string, int>}
+     */
+    private function adminRows(AbsenceRangeRequest $request): array
     {
         [$from, $to] = $this->range($request, self::MAX_ADMIN_RANGE_DAYS);
 
@@ -89,27 +170,7 @@ class AbsenceController extends Controller
                 ];
             });
 
-        $perPage = $request->integer('per_page', 20);
-        $page = max(1, $request->integer('page', 1));
-
-        $paginator = new LengthAwarePaginator(
-            $filtered->forPage($page, $perPage)->values(),
-            $filtered->count(),
-            $perPage,
-            $page,
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'from_date' => $from->toDateString(),
-                'to_date' => $to->toDateString(),
-                'status' => $status,
-                'holiday_supported' => false,
-                'summary' => $summary,
-                'rows' => $paginator,
-            ],
-        ]);
+        return [$from, $to, $status, $filtered, $summary];
     }
 
     /**

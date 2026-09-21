@@ -107,7 +107,15 @@ export default function LocationsPage() {
           isLoading={isLoading}
           emptyMessage="No locations found."
           selectable={false}
-          enableExport={false}
+          exportFilename="locations"
+          exportColumns={[
+            { header: "Code", value: (r) => r.code },
+            { header: "Location", value: (r) => r.name },
+            { header: "Branch", value: (r) => r.branchName },
+            { header: "City", value: (r) => r.city },
+            { header: "State", value: (r) => r.state },
+            { header: "Country", value: (r) => r.country },
+          ]}
         />
       </div>
     </MasterPageShell>

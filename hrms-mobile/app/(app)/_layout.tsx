@@ -58,6 +58,15 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="leave"
+        options={{
+          title: "Leave",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="airplane-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="regularization"
         options={{
           title: "Requests",

@@ -1,5 +1,7 @@
 "use client";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Button } from "@/src/components/ui/Button";
 import {
@@ -121,6 +123,12 @@ export function RegularizationSection() {
     <div className="rounded-2xl border border-border bg-surface p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-semibold text-ink">Attendance Regularization</h3>
+        <div className="flex items-center gap-2">
+        <ExportMenu
+          compact
+          label="my regularizations"
+          onExport={(format) => downloadServerExport("/attendance/regularizations/export", {}, format, "my-regularizations")}
+        />
         <Button
           size="sm"
           onClick={() => {
@@ -133,6 +141,7 @@ export function RegularizationSection() {
           <Plus className="mr-1.5 h-4 w-4" />
           Request
         </Button>
+        </div>
       </div>
 
       {isLoading && (

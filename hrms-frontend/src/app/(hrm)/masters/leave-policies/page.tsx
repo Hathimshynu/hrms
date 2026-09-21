@@ -12,7 +12,7 @@ import { MENU_MODULES } from "@/src/permissions/permissions";
 import * as React from "react";
 import { MasterFormDialog } from "../components/MasterFormDialog";
 import { MasterPageShell } from "../components/MasterPageShell";
-import { descriptionColumn, nameColumn, statusColumn } from "../components/masterColumns";
+import { descriptionColumn, masterExportColumns, nameColumn, statusColumn } from "../components/masterColumns";
 import { useMasterCrud } from "../components/useMasterCrud";
 
 const columns: Column<LeavePolicyDto>[] = [
@@ -38,6 +38,8 @@ export default function LeavePoliciesPage() {
         <DataTable
           data={crud.items}
           columns={columns}
+          exportFilename="leave-policies"
+          exportColumns={masterExportColumns()}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "code"]}
           pageSize={10}

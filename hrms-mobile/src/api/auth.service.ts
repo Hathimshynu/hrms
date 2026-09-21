@@ -29,6 +29,7 @@ export interface LoginResponse {
   data: {
     user: User;
     access_token: string;
+    refresh_token?: string; // returned to native clients only (X-Client-Type: mobile)
     expires_in: number;
     provider: string;
     remember_me: boolean;
@@ -48,11 +49,6 @@ export const authService = {
   logout: () => api.post("/logout"),
 
   getMe: () => api.get<User>("/me").then((res) => res.data),
-
-  refresh: () =>
-    api
-      .post<{ success: boolean; data: { access_token: string; expiresIn: number } }>("/refresh")
-      .then((res) => res.data),
 
   changePassword: (payload: ChangePasswordPayload) => api.post("/change-password", payload),
 };

@@ -3,6 +3,8 @@
 import { Check, X } from "lucide-react";
 import * as React from "react";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Button } from "@/src/components/ui/Button";
 import { StatusPill } from "@/src/components/ui/Datatable";
@@ -125,7 +127,21 @@ export function LeaveReview({ types, canApprove, canReject, onReviewed }: Props)
         <h2 id="leave-review-title" className="text-lg font-semibold text-ink">
           Leave review
         </h2>
-        <span className="text-xs text-muted">{isLoading ? "" : `${total} request${total === 1 ? "" : "s"}`}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted">{isLoading ? "" : `${total} request${total === 1 ? "" : "s"}`}</span>
+          <ExportMenu
+            compact
+            label="leave requests"
+            onExport={(format) =>
+              downloadServerExport(
+                "/leaves/admin/export",
+                { status, leave_type: leaveType, from_date: fromDate, to_date: toDate },
+                format,
+                "leave-review",
+              )
+            }
+          />
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

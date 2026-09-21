@@ -12,7 +12,10 @@ use App\Http\Controllers\Api\EmployeeMasterController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AttendanceRegularizationController;
 use App\Http\Controllers\Api\AbsenceController;
+use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\LeaveController;
+use App\Http\Controllers\Api\PayrollController;
+use App\Http\Controllers\Api\ReportsController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\PermissionController;
 
@@ -48,6 +51,7 @@ Route::post('/google-login', [AuthController::class, 'googleLogin'])
 
 Route::middleware('jwt.cookie')->group(function () {
     Route::post('/refresh', [AuthController::class, 'refresh'])
+        ->middleware('throttle:30,1')
         ->name('auth.refresh');
 });
 
@@ -132,6 +136,9 @@ Route::middleware([
         | Employees
         |--------------------------------------------------------------------------
         */
+
+        Route::get('/employees/export', [EmployeeController::class, 'export'])
+            ->middleware('permission:view employees');
 
         Route::get('/employees', [EmployeeController::class, 'index'])
             ->middleware('permission:view employees');
@@ -283,6 +290,9 @@ Route::middleware([
         |--------------------------------------------------------------------------
         */
 
+        Route::get('/users/export', [ExportController::class, 'users'])
+            ->middleware('permission:view users');
+
         Route::get('/users', [UserController::class, 'index'])
             ->middleware('permission:view users');
 
@@ -339,10 +349,43 @@ Route::middleware([
         |--------------------------------------------------------------------------
         */
 
+        /*
+        |--------------------------------------------------------------------------
+        | Reports & HR analytics (read-only). The payroll report additionally
+        | requires `view payroll`; exports require `export reports`.
+        |--------------------------------------------------------------------------
+        */
+        Route::prefix('reports')->group(function () {
+            Route::get('/export/{report}', [ReportsController::class, 'export'])->middleware('permission:export reports')->name('reports.export');
+            Route::middleware('permission:view reports')->group(function () {
+                Route::get('/summary', [ReportsController::class, 'summary'])->name('reports.summary');
+                Route::get('/workforce', [ReportsController::class, 'workforce'])->name('reports.workforce');
+                Route::get('/attendance', [ReportsController::class, 'attendance'])->name('reports.attendance');
+                Route::get('/absence', [ReportsController::class, 'absence'])->name('reports.absence');
+                Route::get('/leave', [ReportsController::class, 'leave'])->name('reports.leave');
+                Route::get('/departments', [ReportsController::class, 'departments'])->name('reports.departments');
+                Route::get('/monthly', [ReportsController::class, 'monthly'])->name('reports.monthly');
+                Route::get('/payroll', [ReportsController::class, 'payroll'])->middleware('permission:view payroll')->name('reports.payroll');
+            });
+        });
+
+        Route::prefix('payrolls')->group(function () {
+            Route::get('/export', [PayrollController::class, 'export'])->middleware('permission:view payroll')->name('payrolls.export');
+            Route::get('/preview', [PayrollController::class, 'preview'])->middleware('permission:create payroll')->name('payrolls.preview');
+            Route::get('/', [PayrollController::class, 'index'])->middleware('permission:view payroll')->name('payrolls.index');
+            Route::post('/', [PayrollController::class, 'store'])->middleware('permission:create payroll')->name('payrolls.store');
+            Route::get('/{payroll}', [PayrollController::class, 'show'])->middleware('permission:view payroll')->name('payrolls.show');
+            Route::match(['put', 'patch'], '/{payroll}', [PayrollController::class, 'update'])->middleware('permission:edit payroll')->name('payrolls.update');
+            Route::post('/{payroll}/process', [PayrollController::class, 'process'])->middleware('permission:process payroll')->name('payrolls.process');
+            Route::delete('/{payroll}', [PayrollController::class, 'destroy'])->middleware('permission:delete payroll')->name('payrolls.destroy');
+        });
+
         Route::prefix('leaves')->group(function () {
             Route::get('/types', [LeaveController::class, 'types'])->middleware('permission:view leaves')->name('leaves.types');
             Route::get('/balance', [LeaveController::class, 'balance'])->middleware('permission:view leaves')->name('leaves.balance');
+            Route::get('/admin/export', [LeaveController::class, 'adminExport'])->middleware('permission:approve leaves')->name('leaves.admin.export');
             Route::get('/admin', [LeaveController::class, 'adminIndex'])->middleware('permission:approve leaves')->name('leaves.admin');
+            Route::get('/export', [LeaveController::class, 'export'])->middleware('permission:view leaves')->name('leaves.export');
 
             Route::get('/', [LeaveController::class, 'index'])->middleware('permission:view leaves')->name('leaves.index');
             Route::post('/', [LeaveController::class, 'store'])->middleware('permission:create leaves')->name('leaves.store');
@@ -400,6 +443,11 @@ Route::middleware([
             Route::post('/regularizations', [AttendanceRegularizationController::class, 'store'])
                 ->middleware('permission:view attendance')
                 ->name('attendance.regularizations.store');
+
+            // Literal path first so it is not captured by /regularizations/{attendanceRegularization}.
+            Route::get('/regularizations/export', [ExportController::class, 'myRegularizations'])
+                ->middleware('permission:view attendance')
+                ->name('attendance.regularizations.export');
 
             Route::get('/regularizations', [AttendanceRegularizationController::class, 'index'])
                 ->middleware('permission:view attendance')
@@ -469,6 +517,26 @@ Route::middleware([
     | Registered before /{attendance} so the literal path wins.
     |--------------------------------------------------------------------------
     */
+
+            Route::get('/absence/export', [AbsenceController::class, 'mineExport'])
+                ->middleware('permission:view attendance')
+                ->name('attendance.absence.mine.export');
+
+            Route::get('/absence/admin/export', [AbsenceController::class, 'adminExport'])
+                ->middleware('permission:edit attendance')
+                ->name('attendance.absence.admin.export');
+
+            Route::get('/export', [ExportController::class, 'attendance'])
+                ->middleware('permission:edit attendance')
+                ->name('attendance.export');
+
+            Route::get('/my/export', [ExportController::class, 'myAttendance'])
+                ->middleware('permission:view attendance')
+                ->name('attendance.my.export');
+
+            Route::get('/admin/regularizations/export', [ExportController::class, 'regularizationsAdmin'])
+                ->middleware('permission:edit attendance')
+                ->name('attendance.admin.regularizations.export');
 
             Route::get('/absence', [AbsenceController::class, 'mine'])
                 ->middleware('permission:view attendance')

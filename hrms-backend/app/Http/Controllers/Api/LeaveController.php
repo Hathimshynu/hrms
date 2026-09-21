@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\LeavePolicy;
 use App\Models\LeaveRequest;
 use App\Services\LeaveDayCalculator;
+use App\Support\Export\TabularExport;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -222,6 +223,70 @@ class LeaveController extends Controller
     /** Reviewer list across all employees. */
     public function adminIndex(LeaveListRequest $request): JsonResponse
     {
+        return response()->json([
+            'success' => true,
+            'data' => $this->adminQuery($request)->orderByDesc('created_at')->paginate($request->integer('per_page', 20)),
+        ]);
+    }
+
+    /** Reviewer export: the whole filtered set (same filters/permission as the list). */
+    public function adminExport(LeaveListRequest $request)
+    {
+        $query = $this->adminQuery($request)->orderByDesc('created_at');
+
+        return $this->exportLeaves($query, 'leave-review', $request, true);
+    }
+
+    /** The authenticated employee's own leave requests, all pages. */
+    public function export(LeaveListRequest $request)
+    {
+        $employee = $this->currentEmployee($request);
+        $query = LeaveRequest::with('approver:id,name')->where('employee_id', $employee->id)->orderByDesc('created_at');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->string('status')->toString());
+        }
+
+        return $this->exportLeaves($query, 'my-leave', $request, false);
+    }
+
+    private function exportLeaves($query, string $name, LeaveListRequest $request, bool $withEmployee)
+    {
+        $types = LeavePolicy::withTrashed()->pluck('name', 'code');
+
+        $rows = (function () use ($query, $types, $withEmployee) {
+            foreach ($query->cursor() as $l) {
+                $row = [];
+                if ($withEmployee) {
+                    $row[] = $l->employee?->employee_code;
+                    $row[] = trim(($l->employee?->first_name ?? '').' '.($l->employee?->last_name ?? ''));
+                    $row[] = $l->employee?->department?->name;
+                }
+                yield array_merge($row, [
+                    $types[$l->leave_type] ?? $l->leave_type,
+                    TabularExport::date($l->start_date),
+                    TabularExport::date($l->end_date),
+                    (float) $l->total_days,
+                    ucfirst($l->status),
+                    $l->reason,
+                    $l->rejection_reason,
+                    $l->approver?->name,
+                    TabularExport::dateTime($l->approved_at),
+                    TabularExport::dateTime($l->created_at),
+                ]);
+            }
+        })();
+
+        $headings = array_merge(
+            $withEmployee ? ['Employee Code', 'Employee', 'Department'] : [],
+            ['Leave Type', 'From', 'To', 'Days', 'Status', 'Reason', 'Reviewer Remarks', 'Reviewed By', 'Reviewed At', 'Applied At'],
+        );
+
+        return TabularExport::download($name.'-'.now()->format('Y-m-d'), $headings, $rows, $request->string('format', 'csv')->toString());
+    }
+
+    private function adminQuery(LeaveListRequest $request)
+    {
         $query = LeaveRequest::with(['employee:id,employee_code,first_name,last_name,department_id', 'employee.department:id,name', 'approver:id,name']);
 
         if ($request->filled('status')) {
@@ -249,10 +314,7 @@ class LeaveController extends Controller
             $query->whereDate('start_date', '<=', $request->string('to_date')->toString());
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => $query->orderByDesc('created_at')->paginate($request->integer('per_page', 20)),
-        ]);
+        return $query;
     }
 
     public function approve(Request $request, LeaveRequest $leave): JsonResponse

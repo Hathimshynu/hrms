@@ -23,7 +23,12 @@ class MenuController extends Controller
             // Reviewer capability for leave: view = approve leaves, edit = reject leaves (Employees hold neither).
             ['id' => 'leave-review', 'module' => 'leaveReview', 'label' => 'Leave Review', 'routePath' => '/leave', 'view' => 'approve leaves', 'edit' => 'reject leaves', 'delete' => null],
             ['id' => 'payroll', 'module' => 'payroll', 'label' => 'Payroll', 'routePath' => '/admin/payroll', 'view' => 'view payroll', 'edit' => 'edit payroll', 'delete' => 'delete payroll'],
+            // Payroll capability flags (the `payroll` entry carries view/edit/delete): view = the permission itself.
+            ['id' => 'payroll-create', 'module' => 'payrollCreate', 'label' => 'Payroll Preparation', 'routePath' => '/salary', 'view' => 'create payroll', 'edit' => null, 'delete' => null],
+            ['id' => 'payroll-process', 'module' => 'payrollProcess', 'label' => 'Payroll Processing', 'routePath' => '/salary', 'view' => 'process payroll', 'edit' => null, 'delete' => null],
             ['id' => 'reports', 'module' => 'reports', 'label' => 'Reports', 'routePath' => '/admin/reports', 'view' => 'view reports', 'edit' => null, 'delete' => null],
+            // Capability flag: view = the `export reports` permission (the `reports` entry above carries view reports).
+            ['id' => 'reports-export', 'module' => 'reportsExport', 'label' => 'Report Export', 'routePath' => '/admin/reports', 'view' => 'export reports', 'edit' => null, 'delete' => null],
             ['id' => 'users', 'module' => 'users', 'label' => 'Users', 'routePath' => '/admin/users', 'view' => 'view users', 'edit' => 'edit users', 'delete' => 'delete users'],
             ['id' => 'roles', 'module' => 'roles', 'label' => 'Roles', 'routePath' => '/admin/roles', 'view' => 'manage roles', 'edit' => 'manage roles', 'delete' => 'manage roles'],
             ['id' => 'permissions', 'module' => 'permissions', 'label' => 'Permissions', 'routePath' => '/admin/permissions', 'view' => 'manage permissions', 'edit' => 'manage permissions', 'delete' => 'manage permissions'],

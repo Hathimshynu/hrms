@@ -8,6 +8,8 @@ import { formatDate, formatTime } from "@/src/lib/date/format";
 import { attendanceService } from "@/src/lib/attendance/attendance.service";
 import type { AttendanceRecord } from "@/src/lib/attendance/attendance.types";
 import * as React from "react";
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 
 const PAGE_SIZE = 10;
 
@@ -87,6 +89,13 @@ export function MyAttendanceHistory() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-ink">My Attendance History</h3>
         <div className="flex flex-wrap items-center gap-2">
+          <ExportMenu
+            compact
+            label="attendance history"
+            onExport={(format) =>
+              downloadServerExport("/attendance/my/export", { from_date: fromDate, to_date: toDate }, format, "my-attendance")
+            }
+          />
           <Input
             type="date"
             aria-label="From date"

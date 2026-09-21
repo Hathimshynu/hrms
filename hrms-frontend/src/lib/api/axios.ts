@@ -18,10 +18,13 @@ let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
+    // The refresh token is an HttpOnly cookie the browser sends only to /refresh;
+    // JS never sees it. A 409 means another tab just rotated it, so the cookie is
+    // already fresh and the original request can simply be retried.
     refreshPromise = api
       .post("/refresh")
       .then(() => true)
-      .catch(() => false)
+      .catch((refreshErr: AxiosError) => refreshErr.response?.status === 409)
       .finally(() => {
         refreshPromise = null;
       });

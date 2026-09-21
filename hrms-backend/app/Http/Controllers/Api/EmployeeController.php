@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\EmployeeCodeService;
 use App\Services\TemporaryPasswordGenerator;
+use App\Support\Export\TabularExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,75 +28,7 @@ class EmployeeController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Employee::query()
-            ->with([
-                'department:id,name,code',
-                'designation:id,name,code',
-                'branch:id,name,code',
-                'location:id,name,code',
-                'user:id,role_id,username,email,access_level,is_active',
-            ]);
-
-        if ($request->filled('search')) {
-            $search = trim($request->string('search')->toString());
-
-            $query->where(function ($q) use ($search) {
-                $q->where('employee_code', 'like', "%{$search}%")
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"])
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->integer('department_id'));
-        }
-
-        if ($request->filled('designation_id')) {
-            $query->where('designation_id', $request->integer('designation_id'));
-        }
-
-        if ($request->filled('branch_id')) {
-            $query->where('branch_id', $request->integer('branch_id'));
-        }
-
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $request->integer('location_id'));
-        }
-
-        if ($request->filled('reporting_manager_id')) {
-            $query->where('reporting_manager_id', $request->integer('reporting_manager_id'));
-        }
-
-        if ($request->filled('employment_type')) {
-            $query->where('employment_type', $request->string('employment_type')->toString());
-        }
-
-        if ($request->filled('work_mode')) {
-            $query->where('work_mode', $request->string('work_mode')->toString());
-        }
-
-        if ($request->filled('status')) {
-            $query->where('employment_status', $request->string('status')->toString());
-        }
-
-        if ($request->filled('lifecycle')) {
-            $query->where('lifecycle', $request->string('lifecycle')->toString());
-        }
-
-        if ($request->filled('role_id')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('role_id', $request->integer('role_id'));
-            });
-        }
-
-        if ($request->filled('access_level')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('access_level', $request->string('access_level')->toString());
-            });
-        }
+        $query = $this->filteredQuery($request);
 
         $allowedSorts = [
             'first_name',
@@ -186,6 +119,133 @@ class EmployeeController extends Controller
             'message' => 'Employees retrieved successfully.',
             'data' => $employees,
         ]);
+    }
+
+    /**
+     * The filter set shared by the list and the export, so an export always
+     * contains exactly what the list would show across all pages.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Employee>
+     */
+    private function filteredQuery(Request $request)
+    {
+        $query = Employee::query()
+            ->with([
+                'department:id,name,code',
+                'designation:id,name,code',
+                'branch:id,name,code',
+                'location:id,name,code',
+                'user:id,role_id,username,email,access_level,is_active',
+            ]);
+
+        if ($request->filled('search')) {
+            $search = trim($request->string('search')->toString());
+
+            $query->where(function ($q) use ($search) {
+                $q->where('employee_code', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"])
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->integer('department_id'));
+        }
+
+        if ($request->filled('designation_id')) {
+            $query->where('designation_id', $request->integer('designation_id'));
+        }
+
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->integer('branch_id'));
+        }
+
+        if ($request->filled('location_id')) {
+            $query->where('location_id', $request->integer('location_id'));
+        }
+
+        if ($request->filled('reporting_manager_id')) {
+            $query->where('reporting_manager_id', $request->integer('reporting_manager_id'));
+        }
+
+        if ($request->filled('employment_type')) {
+            $query->where('employment_type', $request->string('employment_type')->toString());
+        }
+
+        if ($request->filled('work_mode')) {
+            $query->where('work_mode', $request->string('work_mode')->toString());
+        }
+
+        if ($request->filled('status')) {
+            $query->where('employment_status', $request->string('status')->toString());
+        }
+
+        if ($request->filled('lifecycle')) {
+            $query->where('lifecycle', $request->string('lifecycle')->toString());
+        }
+
+        if ($request->filled('role_id')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('role_id', $request->integer('role_id'));
+            });
+        }
+
+        if ($request->filled('access_level')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('access_level', $request->string('access_level')->toString());
+            });
+        }
+
+        return $query;
+    }
+
+    /** Whole filtered dataset (no pagination), same authorization as the list (`view employees`). */
+    public function export(Request $request)
+    {
+        $query = $this->filteredQuery($request)->orderBy('employee_code');
+        $canViewSalary = $request->user('api')->can('view payroll');
+
+        $rows = (function () use ($query, $canViewSalary) {
+            foreach ($query->cursor() as $e) {
+                $row = [
+                    $e->employee_code,
+                    trim($e->first_name.' '.$e->last_name),
+                    $e->email,
+                    $e->phone,
+                    $e->department?->name,
+                    $e->designation?->name,
+                    $e->branch?->name,
+                    $e->location?->name,
+                    $e->employment_type,
+                    $e->work_mode,
+                    $e->employment_status,
+                    $e->lifecycle,
+                    TabularExport::date($e->joining_date),
+                ];
+
+                // Salary is payroll data: same rule as the list response.
+                if ($canViewSalary) {
+                    $row[] = $e->salary !== null ? (float) $e->salary : null;
+                }
+
+                yield $row;
+            }
+        })();
+
+        $headings = ['Employee Code', 'Name', 'Email', 'Phone', 'Department', 'Designation', 'Branch', 'Location', 'Employment Type', 'Work Mode', 'Status', 'Lifecycle', 'Joining Date'];
+        if ($canViewSalary) {
+            $headings[] = 'Salary';
+        }
+
+        return TabularExport::download(
+            'employees-'.now()->format('Y-m-d'),
+            $headings,
+            $rows,
+            $request->string('format', 'csv')->toString(),
+        );
     }
 
     public function store(StoreEmployeeRequest $request): JsonResponse

@@ -12,7 +12,7 @@ import { MENU_MODULES } from "@/src/permissions/permissions";
 import * as React from "react";
 import { MasterFormDialog } from "../components/MasterFormDialog";
 import { MasterPageShell } from "../components/MasterPageShell";
-import { descriptionColumn, nameColumn, statusColumn } from "../components/masterColumns";
+import { descriptionColumn, masterExportColumns, nameColumn, statusColumn } from "../components/masterColumns";
 import { useMasterCrud } from "../components/useMasterCrud";
 
 const columns: Column<OnboardingChecklistDto>[] = [
@@ -40,6 +40,8 @@ export default function OnboardingChecklistsPage() {
         <DataTable
           data={crud.items}
           columns={columns}
+          exportFilename="onboarding-checklists"
+          exportColumns={masterExportColumns()}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "code"]}
           pageSize={10}

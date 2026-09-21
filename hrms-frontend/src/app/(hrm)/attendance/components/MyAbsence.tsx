@@ -3,6 +3,8 @@
 import { endOfMonth, format, startOfMonth } from "date-fns";
 import * as React from "react";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { StatusPill } from "@/src/components/ui/Datatable";
 import { parseApiError } from "@/src/lib/api/errors";
@@ -45,9 +47,16 @@ export function MyAbsence({ month }: { month: Date }) {
 
   return (
     <section className="grid gap-4 rounded-2xl border border-border bg-surface p-4 sm:p-6" aria-labelledby="my-absence-title">
-      <h2 id="my-absence-title" className="text-lg font-semibold text-ink">
-        Absence & leave days — {format(month, "MMMM yyyy")}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="my-absence-title" className="text-lg font-semibold text-ink">
+          Absence & leave days — {format(month, "MMMM yyyy")}
+        </h2>
+        <ExportMenu
+          compact
+          label="my absence"
+          onExport={(fmt) => downloadServerExport("/attendance/absence/export", { from_date: from, to_date: to }, fmt, "my-absence")}
+        />
+      </div>
 
       {error && <InlineBanner type="error" message={error} />}
 

@@ -3,6 +3,8 @@
 import { Check, X } from "lucide-react";
 import * as React from "react";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Button } from "@/src/components/ui/Button";
 import { StatusPill } from "@/src/components/ui/Datatable";
@@ -90,7 +92,16 @@ export function RegularizationReview({ canReview }: { canReview: boolean }) {
         <h2 id="reg-review-title" className="text-lg font-semibold text-ink">
           Pending regularization requests
         </h2>
-        <span className="text-xs text-muted">{isLoading ? "" : `${rows.length} pending`}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted">{isLoading ? "" : `${rows.length} pending`}</span>
+          <ExportMenu
+            compact
+            label="regularization requests"
+            onExport={(format) =>
+              downloadServerExport("/attendance/admin/regularizations/export", { status: "Pending" }, format, "regularizations")
+            }
+          />
+        </div>
       </div>
 
       {notice && <InlineBanner type="success" message={notice} />}

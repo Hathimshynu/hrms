@@ -23,6 +23,8 @@ import { RegularizationSection } from "./components/RegularizationSection";
 import { TodayAttendanceCard } from "./components/TodayAttendanceCard";
 import { ViewAttendanceDetails } from "./components/ViewAttendanceDetails";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { usePermission } from "@/src/hooks/usePermission";
 import { attendanceService } from "@/src/lib/attendance/attendance.service";
@@ -280,6 +282,19 @@ export default function AttendancePage() {
               <h2 className="text-lg font-semibold text-ink">
                 Team Attendance {calendarSelected ? `— ${formatDate(localDateKey(calendarSelected))}` : ""}
               </h2>
+              <div className="flex items-center gap-2">
+              <ExportMenu
+                compact
+                label="team attendance"
+                onExport={(format) =>
+                  downloadServerExport(
+                    "/attendance/export",
+                    { attendance_date: adminDate, status: adminStatus },
+                    format,
+                    "attendance",
+                  )
+                }
+              />
               <div className="w-48">
                 <Select
                   placeholder="All statuses"
@@ -288,6 +303,7 @@ export default function AttendancePage() {
                   clearable
                   onChange={(v) => setAdminStatus((v as string) || "")}
                 />
+              </div>
               </div>
             </div>
 

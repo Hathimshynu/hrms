@@ -5,14 +5,16 @@ import { DeleteAlert } from "@/src/components/common/ReusableAlert";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Avatar, Column, DataTable, StatusPill } from "@/src/components/ui/Datatable";
 import { Select } from "@/src/components/ui/Select";
-import { ArrowLeft, Plus, Search, Upload } from "lucide-react";
+import { ArrowLeft, Plus, Search } from "lucide-react";
 import * as React from "react";
 import { useEffect, useState } from "react";
 import { AddEmployee } from "./components/AddEmployee/AddEmployee";
 import { EditEmployeeForm } from "./components/EditEmployeeForm";
 import { ViewEmployee } from "./components/ViewEmployee";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
 import { usePermission } from "@/src/hooks/usePermission";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { parseApiError } from "@/src/lib/api/errors";
 import { departmentService, type DepartmentDto } from "@/src/lib/departments/department.service";
 import { designationService, type DesignationDto } from "@/src/lib/designations/designation.service";
@@ -234,13 +236,22 @@ export default function PeoplePage() {
             <span className="hidden sm:inline">Add Employee</span>
           </button>
 
-          <button
-            onClick={() => {}}
-            className="flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-[#FF7F50] px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#E97451] hover:scale-105"
-          >
-            <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          <ExportMenu
+            label="employees"
+            onExport={(format) =>
+              downloadServerExport(
+                "/employees/export",
+                {
+                  search,
+                  department_id: departmentId ? Number(departmentId) : undefined,
+                  designation_id: designationId ? Number(designationId) : undefined,
+                  status,
+                },
+                format,
+                "employees",
+              )
+            }
+          />
         </div>
       </div>
 

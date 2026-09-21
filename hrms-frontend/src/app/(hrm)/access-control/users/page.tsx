@@ -80,7 +80,7 @@ export default function UsersPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const result = await userService.list();
+      const result = await userService.list({ per_page: 100 });
       setUsers(result.data);
     } catch (err) {
       setLoadError(parseApiError(err, "Failed to load users.").message);
@@ -327,6 +327,15 @@ export default function UsersPage() {
         <DataTable
           data={filteredData}
           columns={columns}
+          exportFilename="users"
+          exportColumns={[
+            { header: "Name", value: (r) => r.name },
+            { header: "Email", value: (r) => r.email },
+            { header: "Role", value: (r) => r.role?.name },
+            { header: "Employee Code", value: (r) => r.employee?.employee_code },
+            { header: "Status", value: (r) => (r.is_active ? "Active" : "Inactive") },
+            { header: "Last Login", value: (r) => (r.last_login_at ? formatDateTime(r.last_login_at) : "") },
+          ]}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "email"]}
           searchPlaceholder="Search by name or email..."

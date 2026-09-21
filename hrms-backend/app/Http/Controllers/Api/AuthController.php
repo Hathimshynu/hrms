@@ -9,7 +9,10 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +26,8 @@ use App\Models\LoginSession;
 
 class AuthController extends Controller
 {
+    /** Seconds during which a just-rotated refresh token is treated as a benign concurrent-tab race. */
+    private const REFRESH_RACE_SECONDS = 15;
 
     public function login(LoginRequest $request): JsonResponse
     {
@@ -272,6 +277,10 @@ class AuthController extends Controller
                 'message' => 'Logged out successfully.',
             ])->withoutCookie(
                 config('jwt.auth_cookie_name', 'hrms_auth')
+            )->withoutCookie(
+                config('jwt.refresh_cookie_name'),
+                '/api/refresh',
+                config('jwt.auth_cookie_domain')
             );
         } catch (JWTException $e) {
 
@@ -287,180 +296,71 @@ class AuthController extends Controller
         return response()->json(UserResource::make(auth('api')->user())->resolve());
     }
 
-    public function refresh(): JsonResponse
+    /**
+     * Exchange a refresh token for a new access token (and a rotated refresh
+     * token). The refresh token is an opaque random secret, stored only as a
+     * SHA-256 hash on the login session:
+     *  - web sends it in the HttpOnly `hrms_refresh` cookie (path /api/refresh);
+     *  - native clients (X-Client-Type: mobile) send it as `refresh_token`.
+     * The expired access token is NOT a refresh credential.
+     *
+     * Rotation: every use retires the presented token. Presenting a token that
+     * was already rotated revokes the user's sessions (theft signal), except
+     * within a short race window where a concurrent tab already rotated it.
+     */
+    public function refresh(Request $request): JsonResponse
     {
-        try {
-            $oldToken = JWTAuth::getToken();
+        $raw = $request->input('refresh_token');
 
-            if (!$oldToken) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Authentication cookie is required.',
-                    'error' => 'TOKEN_MISSING',
-                ], Response::HTTP_UNAUTHORIZED);
+        if (! is_string($raw) || $raw === '') {
+            $raw = $request->cookie(config('jwt.refresh_cookie_name'));
+        }
+
+        if (! is_string($raw) || strlen($raw) < 32) {
+            return $this->refreshFailure('Refresh token is required.', 'REFRESH_TOKEN_MISSING');
+        }
+
+        $hash = hash('sha256', $raw);
+        $native = $this->isNativeClient($request);
+
+        $result = DB::transaction(function () use ($hash) {
+            $session = LoginSession::where('refresh_token_hash', $hash)->lockForUpdate()->first();
+
+            if (! $session) {
+                return ['error' => ['Invalid refresh token.', 'REFRESH_TOKEN_INVALID', Response::HTTP_UNAUTHORIZED]];
             }
 
-            /*
-        |--------------------------------------------------------------------------
-        | Get the current login session BEFORE refreshing
-        |--------------------------------------------------------------------------
-        */
+            $user = User::find($session->user_id);
 
-            $sessions = LoginSession::where('is_active', true)
-                ->where('expires_at', '>', now())
-                ->get();
+            if (! $session->is_active) {
+                if ($session->rotated_at && $session->rotated_at->gt(now()->subSeconds(self::REFRESH_RACE_SECONDS))) {
+                    return ['error' => ['Refresh token was just rotated. Retry the request.', 'REFRESH_RACE', Response::HTTP_CONFLICT]];
+                }
 
-            $matchedSession = null;
-            $user = null;
+                if ($session->rotated_at && $user) {
+                    // Reuse of an already-rotated token: assume theft, end every session.
+                    $user->loginSessions()->where('is_active', true)->update(['is_active' => false, 'logged_out_at' => now()]);
+                    $user->increment('token_version');
+                }
 
-            /*
-        |--------------------------------------------------------------------------
-        | Decode token claims without authenticating the expired token
-        |--------------------------------------------------------------------------
-        |
-        | The JWT payload contains the user ID and JTI.
-        | We need these only to identify the existing login session.
-        |
-        */
-
-            $parts = explode('.', $oldToken);
-
-            if (count($parts) !== 3) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid authentication token.',
-                    'error' => 'TOKEN_INVALID',
-                ], Response::HTTP_UNAUTHORIZED);
+                return ['error' => ['Refresh token is no longer valid. Please log in again.', 'REFRESH_TOKEN_REUSED', Response::HTTP_UNAUTHORIZED]];
             }
 
-            $payload = json_decode(
-                base64_decode(
-                    strtr($parts[1], '-_', '+/')
-                ),
-                true
-            );
+            if (! $session->refresh_expires_at || $session->refresh_expires_at->lte(now())) {
+                $session->update(['is_active' => false, 'logged_out_at' => now()]);
 
-            if (!is_array($payload)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid authentication token.',
-                    'error' => 'TOKEN_INVALID',
-                ], Response::HTTP_UNAUTHORIZED);
+                return ['error' => ['Refresh window expired. Please log in again.', 'REFRESH_WINDOW_EXPIRED', Response::HTTP_UNAUTHORIZED]];
             }
 
-            $userId = $payload['sub'] ?? null;
-            $oldJti = $payload['jti'] ?? null;
-            $issuedAt = $payload['iat'] ?? null;
-
-            if (!$userId || !$oldJti || !$issuedAt) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid authentication token.',
-                    'error' => 'TOKEN_INVALID',
-                ], Response::HTTP_UNAUTHORIZED);
+            if (! $user || ! $user->is_active) {
+                return ['error' => ['User account is unavailable.', 'ACCOUNT_INACTIVE', Response::HTTP_UNAUTHORIZED]];
             }
 
-            /*
-        |--------------------------------------------------------------------------
-        | Check refresh window
-        |--------------------------------------------------------------------------
-        */
+            $accessToken = JWTAuth::fromUser($user);
+            $newJti = JWTAuth::setToken($accessToken)->getPayload()->get('jti');
+            $newRefresh = bin2hex(random_bytes(32));
 
-            $refreshTtl = (int) config('jwt.refresh_ttl');
-
-            if (now()->timestamp > ((int) $issuedAt + ($refreshTtl * 60))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Refresh window expired. Please login again.',
-                    'error' => 'REFRESH_WINDOW_EXPIRED',
-                ], Response::HTTP_UNAUTHORIZED);
-            }
-
-            /*
-        |--------------------------------------------------------------------------
-        | Find user
-        |--------------------------------------------------------------------------
-        */
-
-            $user = User::find($userId);
-
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User account not found.',
-                    'error' => 'USER_NOT_FOUND',
-                ], Response::HTTP_UNAUTHORIZED);
-            }
-
-            if (!$user->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User account is inactive.',
-                    'error' => 'ACCOUNT_INACTIVE',
-                ], Response::HTTP_UNAUTHORIZED);
-            }
-
-            /*
-        |--------------------------------------------------------------------------
-        | Find current login session
-        |--------------------------------------------------------------------------
-        */
-
-            $matchedSession = $user->loginSessions()
-                ->where('jti', $oldJti)
-                ->where('is_active', true)
-                ->first();
-
-            if (!$matchedSession) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Login session is no longer active. Please login again.',
-                    'error' => 'SESSION_INVALID',
-                ], Response::HTTP_UNAUTHORIZED);
-            }
-
-            /*
-        |--------------------------------------------------------------------------
-        | Refresh JWT
-        |--------------------------------------------------------------------------
-        */
-
-            $newToken = JWTAuth::setToken($oldToken)->refresh();
-
-            /*
-        |--------------------------------------------------------------------------
-        | Decode NEW token
-        |--------------------------------------------------------------------------
-        */
-
-            $newPayload = JWTAuth::setToken($newToken)->getPayload();
-
-            $newJti = $newPayload->get('jti');
-
-            /*
-        |--------------------------------------------------------------------------
-        | Remember Me
-        |--------------------------------------------------------------------------
-        */
-
-            $rememberMe = (bool) $matchedSession->remember;
-
-            /*
-        |--------------------------------------------------------------------------
-        | Deactivate old session
-        |--------------------------------------------------------------------------
-        */
-
-            $matchedSession->update([
-                'is_active' => false,
-                'logged_out_at' => now(),
-            ]);
-
-            /*
-        |--------------------------------------------------------------------------
-        | Create new session
-        |--------------------------------------------------------------------------
-        */
+            $session->update(['is_active' => false, 'rotated_at' => now()]);
 
             $user->loginSessions()->create([
                 'jti' => $newJti,
@@ -469,55 +369,77 @@ class AuthController extends Controller
                 'logged_in_at' => now(),
                 'expires_at' => now()->addMinutes(config('jwt.ttl')),
                 'is_active' => true,
-                'provider' => 'refresh',
-                'remember' => $rememberMe,
+                'provider' => $session->provider,
+                'remember' => $session->remember,
+                'refresh_token_hash' => hash('sha256', $newRefresh),
+                // Absolute window: rotation never extends the original login's refresh lifetime.
+                'refresh_expires_at' => $session->refresh_expires_at,
             ]);
 
-            /*
-        |--------------------------------------------------------------------------
-        | Return new cookie
-        |--------------------------------------------------------------------------
-        */
+            return [
+                'access' => $accessToken,
+                'refresh' => $newRefresh,
+                'remember' => (bool) $session->remember,
+                'refresh_expires_at' => $session->refresh_expires_at,
+            ];
+        });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Token refreshed successfully.',
-                'data' => [
-                    // Additive for native clients - see the matching note in
-                    // authenticatedResponse(). Web ignores this field.
-                    'access_token' => $newToken,
-                    'expiresIn' => config('jwt.ttl') * 60,
-                    'rememberMe' => $rememberMe,
-                ],
-            ])->cookie(
-                $this->authCookie($newToken, $rememberMe)
-            );
-        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+        if (isset($result['error'])) {
+            [$message, $code, $status] = $result['error'];
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Refresh window expired. Please login again.',
-                'error' => 'REFRESH_WINDOW_EXPIRED',
-            ], Response::HTTP_UNAUTHORIZED);
-        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid authentication token. Please login again.',
-                'error' => 'TOKEN_INVALID',
-            ], Response::HTTP_UNAUTHORIZED);
-        } catch (JWTException $e) {
-
-            Log::warning('JWT refresh failed.', [
-                'message' => $e->getMessage(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Unable to refresh session. Please login again.',
-                'error' => 'REFRESH_FAILED',
-            ], Response::HTTP_UNAUTHORIZED);
+            return $this->refreshFailure($message, $code, $status);
         }
+
+        $data = [
+            'access_token' => $result['access'],
+            'expires_in' => config('jwt.ttl') * 60,
+        ];
+
+        if ($native) {
+            $data['refresh_token'] = $result['refresh'];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Token refreshed successfully.',
+            'data' => $data,
+        ])->cookie($this->authCookie($result['access'], $result['remember']))
+            ->cookie($this->refreshCookie($result['refresh'], $result['remember'], $result['refresh_expires_at']));
+    }
+
+    private function refreshFailure(string $message, string $code, int $status = Response::HTTP_UNAUTHORIZED): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'error' => $code,
+        ], $status);
+    }
+
+    private function isNativeClient(Request $request): bool
+    {
+        return strtolower((string) $request->header('X-Client-Type')) === 'mobile';
+    }
+
+    /**
+     * HttpOnly, scoped to the refresh endpoint only so it is never sent with
+     * ordinary API calls.
+     */
+    private function refreshCookie(string $token, bool $remember, ?Carbon $expiresAt = null)
+    {
+        $minutes = $remember && $expiresAt ? max(1, (int) now()->diffInMinutes($expiresAt, false)) : 0;
+
+        return cookie(
+            config('jwt.refresh_cookie_name'),
+            $token,
+            $minutes,
+            '/api/refresh',
+            config('jwt.auth_cookie_domain'),
+            config('jwt.auth_cookie_secure'),
+            true,
+            false,
+            config('jwt.auth_cookie_same_site')
+        );
     }
 
     public function changePassword(ChangePasswordRequest $request): JsonResponse
@@ -578,6 +500,10 @@ class AuthController extends Controller
             config('jwt.ttl')
         );
 
+        // Opaque refresh token; only its SHA-256 hash is persisted.
+        $refreshToken = bin2hex(random_bytes(32));
+        $refreshExpiresAt = now()->addMinutes((int) config('jwt.refresh_ttl'));
+
         $user->update([
             'last_login_at' => now(),
             'last_login_ip' => request()->ip(),
@@ -592,34 +518,32 @@ class AuthController extends Controller
             'is_active' => true,
             'provider' => $provider,
             'remember' => $rememberMe,
+            'refresh_token_hash' => hash('sha256', $refreshToken),
+            'refresh_expires_at' => $refreshExpiresAt,
         ]);
+
+        $data = [
+            'user' => new UserResource($user->load('role')),
+            // Web relies on the httpOnly cookies below; the access token is also returned
+            // for native clients, which send it as `Authorization: Bearer`.
+            'access_token' => $token,
+            'expires_in' => config('jwt.ttl') * 60,
+            'provider' => $provider,
+            'remember_me' => $rememberMe,
+        ];
+
+        // The refresh token is only put in the body for native clients (secure storage);
+        // browsers get it solely as an HttpOnly cookie scoped to /api/refresh.
+        if (request() && $this->isNativeClient(request())) {
+            $data['refresh_token'] = $refreshToken;
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Login successful.',
-            'data' => [
-                'user' => new UserResource(
-                    $user->load('role')
-                ),
-                // The web client never reads this - it relies solely on the
-                // httpOnly cookie below. Included additively for native
-                // clients (React Native), which cannot reliably read/persist
-                // an httpOnly cookie and instead store this in secure storage
-                // and send it as `Authorization: Bearer <token>` - a header
-                // the `auth:api` JWT guard already accepts natively
-                // (see AddJwtCookieToRequest, which only falls back to the
-                // cookie when no Bearer header is already present).
-                'access_token' => $token,
-                'expires_in' => config('jwt.ttl') * 60,
-                'provider' => $provider,
-                'remember_me' => $rememberMe,
-            ],
-        ])->cookie(
-            $this->authCookie(
-                $token,
-                $rememberMe
-            )
-        );
+            'data' => $data,
+        ])->cookie($this->authCookie($token, $rememberMe))
+            ->cookie($this->refreshCookie($refreshToken, $rememberMe, $refreshExpiresAt));
     }
 
     private function authCookie(string $token, bool $remember = false)

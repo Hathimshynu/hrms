@@ -2,9 +2,9 @@
 import * as React from "react";
 
 import { authService, type LoginPayload, type User } from "../api/auth.service";
-import { setAuthToken, setTokenRefreshedHandler, setUnauthorizedHandler } from "../api/client";
+import { setAuthToken, setRefreshToken, setTokenRefreshedHandler, setUnauthorizedHandler } from "../api/client";
 import { parseApiError } from "../api/errors";
-import { tokenStorage } from "../storage/secureStorage";
+import { refreshTokenStorage, tokenStorage } from "../storage/secureStorage";
 import type { AuthContextValue } from "./auth.types";
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -18,17 +18,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearSession = React.useCallback(() => {
     setAuthToken(null);
+    setRefreshToken(null);
     setUser(null);
     setIsAuthenticated(false);
     tokenStorage.clear().catch(() => {});
+    refreshTokenStorage.clear().catch(() => {});
   }, []);
 
   // Wire the API client's 401/refresh callbacks once. Kept as callbacks
   // (not a store import) to avoid a circular dependency with the API layer.
   React.useEffect(() => {
     setUnauthorizedHandler(clearSession);
-    setTokenRefreshedHandler((token) => {
+    setTokenRefreshedHandler((token, refreshToken) => {
       tokenStorage.set(token).catch(() => {});
+      if (refreshToken) refreshTokenStorage.set(refreshToken).catch(() => {});
     });
     return () => {
       setUnauthorizedHandler(null);
@@ -55,13 +58,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       const storedToken = await tokenStorage.get().catch(() => null);
+      const storedRefresh = await refreshTokenStorage.get().catch(() => null);
 
-      if (!storedToken) {
+      if (!storedToken && !storedRefresh) {
         if (active) setIsInitializing(false);
         return;
       }
 
+      // An expired access token is fine here: the first 401 triggers a silent refresh.
       setAuthToken(storedToken);
+      setRefreshToken(storedRefresh);
       await refreshUser();
       if (active) setIsInitializing(false);
     })();
@@ -77,9 +83,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const res = await authService.login(payload);
-      const { user: loggedInUser, access_token } = res.data;
+      const { user: loggedInUser, access_token, refresh_token } = res.data;
 
       await tokenStorage.set(access_token);
+      if (refresh_token) {
+        await refreshTokenStorage.set(refresh_token);
+        setRefreshToken(refresh_token);
+      }
       setAuthToken(access_token);
       setUser(loggedInUser);
       setIsAuthenticated(true);

@@ -14,11 +14,14 @@ class LoginSession extends Model
     protected $fillable = [
         'user_id',
         'jti',
+        'refresh_token_hash',
         'ip_address',
         'user_agent',
         'logged_in_at',
         'logged_out_at',
         'expires_at',
+        'refresh_expires_at',
+        'rotated_at',
         'is_active',
         'provider',
         'remember',
@@ -30,6 +33,8 @@ class LoginSession extends Model
             'logged_in_at' => 'datetime',
             'logged_out_at' => 'datetime',
             'expires_at' => 'datetime',
+            'refresh_expires_at' => 'datetime',
+            'rotated_at' => 'datetime',
             'is_active' => 'boolean',
             'remember' => 'boolean',
         ];

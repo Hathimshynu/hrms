@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import * as React from "react";
+import { ExportMenu } from "../common/ExportMenu";
 import { Input } from "./Input";
 
 export type SortDirection = "asc" | "desc" | null;
@@ -45,6 +46,11 @@ export interface FilterConfig {
   defaultValue?: string[];
 }
 
+export interface ExportColumn<T> {
+  header: string;
+  value: (row: T) => string | number | null | undefined;
+}
+
 export interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
@@ -69,6 +75,9 @@ export interface DataTableProps<T> {
   showActions?: boolean;
   enableColumnVisibility?: boolean;
   enableExport?: boolean;
+  /** Adds an Export menu that exports every row matching the current search/filters/sort (all pages). */
+  exportColumns?: ExportColumn<T>[];
+  exportFilename?: string;
   enableFilter?: boolean;
   enableSearch?: boolean;
 }
@@ -303,6 +312,9 @@ export function DataTable<T>({
   enableColumnVisibility = true,
   enableFilter = true,
   enableSearch = true,
+  enableExport = true,
+  exportColumns,
+  exportFilename = "export",
 }: DataTableProps<T>) {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<string | null>(null);
@@ -550,6 +562,23 @@ export function DataTable<T>({
                   </div>
                 )}
               </div>
+            )}
+
+            {enableExport && exportColumns && exportColumns.length > 0 && (
+              <ExportMenu
+                label={exportFilename.replace(/-/g, " ")}
+                disabled={isLoading || sorted.length === 0}
+                onExport={async (format) => {
+                  // Loaded on demand so the writer is not in the page bundle.
+                  const { exportRows } = await import("@/src/lib/export/clientExport");
+                  exportRows(
+                    exportColumns.map((c) => c.header),
+                    sorted.map((row) => exportColumns.map((c) => c.value(row))),
+                    format,
+                    exportFilename,
+                  );
+                }}
+              />
             )}
 
             {enableColumnVisibility && (

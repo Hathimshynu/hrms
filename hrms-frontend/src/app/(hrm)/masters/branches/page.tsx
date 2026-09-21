@@ -78,7 +78,14 @@ export default function BranchesPage() {
           isLoading={isLoading}
           emptyMessage="No branches found."
           selectable={false}
-          enableExport={false}
+          exportFilename="branches"
+          exportColumns={[
+            { header: "Code", value: (r) => r.code },
+            { header: "Branch", value: (r) => r.name },
+            { header: "City", value: (r) => r.city },
+            { header: "State", value: (r) => r.state },
+            { header: "Country", value: (r) => r.country },
+          ]}
         />
       </div>
     </MasterPageShell>

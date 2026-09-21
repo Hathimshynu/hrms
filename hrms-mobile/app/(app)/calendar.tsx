@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { attendanceService } from "../../src/api/attendance.service";
 import { parseApiError } from "../../src/api/errors";
 import { Banner } from "../../src/components/common/Banner";
+import { AbsenceSummaryCard } from "../../src/components/common/AbsenceSummaryCard";
 import { LoadingView } from "../../src/components/common/LoadingView";
 import { colors, statusColors } from "../../src/constants/colors";
 import type { AttendanceStatus } from "../../src/attendance/attendance.types";
@@ -127,6 +128,8 @@ export default function CalendarScreen() {
               </View>
             ))}
         </View>
+
+        <AbsenceSummaryCard year={year} month={month + 1} />
       </ScrollView>
     </SafeAreaView>
   );

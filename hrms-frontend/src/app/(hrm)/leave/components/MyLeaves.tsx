@@ -3,6 +3,8 @@
 import { Plus } from "lucide-react";
 import * as React from "react";
 
+import { ExportMenu } from "@/src/components/common/ExportMenu";
+import { downloadServerExport } from "@/src/lib/export/download";
 import { InlineBanner } from "@/src/components/common/InlineBanner";
 import { Button } from "@/src/components/ui/Button";
 import { StatusPill } from "@/src/components/ui/Datatable";
@@ -99,6 +101,11 @@ export function MyLeaves({ types, refreshKey, canApply, canCancel, onApply, onCh
               }}
             />
           </div>
+          <ExportMenu
+            compact
+            label="my leave requests"
+            onExport={(format) => downloadServerExport("/leaves/export", { status }, format, "my-leave")}
+          />
           {canApply && (
             <Button type="button" onClick={onApply}>
               <Plus className="size-4" /> Apply leave

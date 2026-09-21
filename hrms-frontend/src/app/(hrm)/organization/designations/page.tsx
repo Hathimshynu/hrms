@@ -8,7 +8,7 @@ import {
   FilterPill,
   StatusPill,
 } from "@/src/components/ui/Datatable";
-import { ArrowLeft, Plus, Upload } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import * as React from "react";
 import { useEffect, useState } from "react";
 import { AddDesignation } from "../components/AddDesignation";
@@ -257,14 +257,6 @@ export default function DesignationPage() {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Designation</span>
             </button>
-            <button
-              onClick={() => {}}
-              aria-label="Export"
-              className="flex h-10 sm:h-12 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg bg-[#FF7F50] px-3.5 sm:px-4 text-sm font-semibold text-white transition-all duration-200 hover:bg-[#E97451] hover:scale-105"
-            >
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Export</span>
-            </button>
           </div>
         </div>
       </div>
@@ -276,6 +268,15 @@ export default function DesignationPage() {
         <DataTable
           data={filteredData}
           columns={columns}
+          exportFilename="designations"
+          exportColumns={[
+            { header: "Code", value: (r) => r.code },
+            { header: "Designation", value: (r) => r.name },
+            { header: "Department", value: (r) => r.department?.name },
+            { header: "Level", value: (r) => r.level },
+            { header: "Status", value: (r) => r.status },
+            { header: "Description", value: (r) => r.description },
+          ]}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "code"]}
           filtersSlot={

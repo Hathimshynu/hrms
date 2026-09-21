@@ -7,7 +7,7 @@
 // off-days, grace window, overtime rule) rather than forcing one layout.
 "use client";
 
-import type { Column } from "@/src/components/ui/Datatable";
+import type { Column, ExportColumn } from "@/src/components/ui/Datatable";
 import { StatusPill } from "@/src/components/ui/Datatable";
 import type { BaseMasterDto } from "@/src/lib/masters/master.service";
 
@@ -43,4 +43,16 @@ export function descriptionColumn<T extends BaseMasterDto>(): Column<T> {
       <span className="text-sm text-gray-500 line-clamp-1">{row.description || "—"}</span>
     ),
   };
+}
+
+// Export columns shared by the 8 CRUD masters: name, code, page-specific extras,
+// status, description. Exports every row matching the table's search/filters.
+export function masterExportColumns<T extends BaseMasterDto>(extra: ExportColumn<T>[] = []): ExportColumn<T>[] {
+  return [
+    { header: "Name", value: (r) => r.name },
+    { header: "Code", value: (r) => r.code },
+    ...extra,
+    { header: "Status", value: (r) => (r.is_active ? "Active" : "Inactive") },
+    { header: "Description", value: (r) => r.description },
+  ];
 }

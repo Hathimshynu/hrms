@@ -13,7 +13,7 @@ import { MENU_MODULES } from "@/src/permissions/permissions";
 import * as React from "react";
 import { MasterFormDialog, type MasterFieldConfig } from "../components/MasterFormDialog";
 import { MasterPageShell } from "../components/MasterPageShell";
-import { descriptionColumn, nameColumn, statusColumn } from "../components/masterColumns";
+import { descriptionColumn, masterExportColumns, nameColumn, statusColumn } from "../components/masterColumns";
 import { useMasterCrud } from "../components/useMasterCrud";
 
 const EXTRA_FIELDS: MasterFieldConfig[] = [
@@ -58,6 +58,12 @@ export default function WorkSchedulesPage() {
         <DataTable
           data={crud.items}
           columns={columns}
+          exportFilename="work-schedules"
+          exportColumns={masterExportColumns<WorkScheduleDto>([
+            { header: "Start Time", value: (r) => formatTime(r.start_time) },
+            { header: "End Time", value: (r) => formatTime(r.end_time) },
+            { header: "Working Hours", value: (r) => (r.working_hours == null || r.working_hours === "" ? null : Number(r.working_hours)) },
+          ])}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "code"]}
           pageSize={10}

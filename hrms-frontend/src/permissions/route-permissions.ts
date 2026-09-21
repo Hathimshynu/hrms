@@ -60,6 +60,7 @@ export const ROUTE_MODULE_MAP: Record<string, MenuModuleKey> = {
   "/leave": MENU_MODULES.LEAVES,
   "/leave/policy": MENU_MODULES.LEAVES,
   "/salary": MENU_MODULES.PAYROLL,
+  "/reports": MENU_MODULES.REPORTS,
   "/access-control/users": MENU_MODULES.USERS,
   "/access-control/roles": MENU_MODULES.ROLES,
   "/access-control/permissions": MENU_MODULES.PERMISSIONS,

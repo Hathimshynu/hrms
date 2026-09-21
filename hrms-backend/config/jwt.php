@@ -25,6 +25,9 @@ return [
         'secure' => filter_var(env('JWT_COOKIE_SECURE', false), FILTER_VALIDATE_BOOL),
         'same_site' => env('JWT_COOKIE_SAME_SITE', 'lax'),
     ],
+    // HttpOnly refresh-token cookie (path /api/refresh). Separate from the access cookie.
+    'refresh_cookie_name' => env('JWT_REFRESH_COOKIE', 'hrms_refresh'),
+
     'auth_cookie_name' => env(
         'JWT_AUTH_COOKIE',
         'hrms_auth'

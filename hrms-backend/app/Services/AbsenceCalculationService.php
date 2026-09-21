@@ -29,6 +29,14 @@ class AbsenceCalculationService
 {
     public const STATUSES = ['present', 'absent', 'leave', 'weekly_off', 'upcoming'];
 
+    public const LABELS = [
+        'present' => 'Present',
+        'absent' => 'Absent',
+        'leave' => 'On Leave',
+        'weekly_off' => 'Week Off',
+        'upcoming' => 'Upcoming',
+    ];
+
     private const PRESENT_ATTENDANCE = ['Present', 'Late', 'Half Day'];
 
     public function __construct(private readonly LeaveDayCalculator $days) {}
@@ -72,41 +80,60 @@ class AbsenceCalculationService
             ->get(['employee_id', 'start_date', 'end_date', 'status'])
             ->groupBy('employee_id');
 
-        $rows = collect();
+        // Pre-compute the day list once and compare plain Y-m-d strings: the
+        // per-employee loop below runs employees x days times (reports call it
+        // for hundreds of employees over up to 92 days), so it avoids Carbon.
+        $dayList = [];
+        for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+            $dayList[] = [$d->toDateString(), $d->englishDayOfWeek];
+        }
+        $todayKey = $today->toDateString();
+
+        $rows = [];
 
         foreach ($employees as $employee) {
-            $weeklyOff = $this->days->weeklyOffDays($employee);
-            $employeeLeaves = $leaves->get($employee->id, collect());
+            $weeklyOff = array_flip($this->days->weeklyOffDays($employee));
             $presentDates = $present->get($employee->id, []);
-            $start = $employee->joining_date && Carbon::parse($employee->joining_date)->gt($from)
-                ? Carbon::parse($employee->joining_date)->startOfDay()
-                : $from->copy();
+            $joined = $employee->joining_date ? Carbon::parse($employee->joining_date)->toDateString() : null;
+            $requests = $leaves->get($employee->id, collect())
+                ->map(fn ($l) => [$l->status, $l->start_date->toDateString(), $l->end_date->toDateString()])
+                ->all();
 
-            for ($day = $start->copy(); $day->lte($to); $day->addDay()) {
-                $key = $day->toDateString();
+            foreach ($dayList as [$key, $dayName]) {
+                if ($joined !== null && $key < $joined) {
+                    continue;
+                }
 
-                $approved = $employeeLeaves->contains(fn ($l) => $l->status === 'approved'
-                    && $l->start_date->lte($day) && $l->end_date->gte($day));
-                $pending = $employeeLeaves->contains(fn ($l) => $l->status === 'pending'
-                    && $l->start_date->lte($day) && $l->end_date->gte($day));
+                $approved = false;
+                $pending = false;
+                foreach ($requests as [$leaveStatus, $leaveFrom, $leaveTo]) {
+                    if ($leaveFrom <= $key && $leaveTo >= $key) {
+                        if ($leaveStatus === 'approved') {
+                            $approved = true;
+                        } else {
+                            $pending = true;
+                        }
+                    }
+                }
 
                 $status = match (true) {
                     isset($presentDates[$key]) => 'present',
-                    $this->days->isWeeklyOff($weeklyOff, $day) => 'weekly_off',
+                    isset($weeklyOff[$dayName]) => 'weekly_off',
                     $approved => 'leave',
-                    $day->gt($today) => 'upcoming',
+                    $key > $todayKey => 'upcoming',
                     default => 'absent',
                 };
 
-                $rows->push([
+                $rows[] = [
                     'employee_id' => $employee->id,
                     'date' => $key,
                     'status' => $status,
                     'pending_leave' => $pending && $status === 'absent',
-                ]);
+                ];
             }
         }
 
-        return $rows;
+        return collect($rows);
+
     }
 }

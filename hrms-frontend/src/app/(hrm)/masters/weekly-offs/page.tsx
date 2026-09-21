@@ -12,7 +12,7 @@ import { MENU_MODULES } from "@/src/permissions/permissions";
 import * as React from "react";
 import { MasterFormDialog, type MasterFieldConfig } from "../components/MasterFormDialog";
 import { MasterPageShell } from "../components/MasterPageShell";
-import { descriptionColumn, nameColumn, statusColumn } from "../components/masterColumns";
+import { descriptionColumn, masterExportColumns, nameColumn, statusColumn } from "../components/masterColumns";
 import { useMasterCrud } from "../components/useMasterCrud";
 
 const EXTRA_FIELDS: MasterFieldConfig[] = [{ type: "days", key: "days", label: "Off Days" }];
@@ -46,6 +46,8 @@ export default function WeeklyOffsPage() {
         <DataTable
           data={crud.items}
           columns={columns}
+          exportFilename="weekly-offs"
+          exportColumns={masterExportColumns<WeeklyOffDto>([{ header: "Off Days", value: (r) => (r.days ?? []).join(", ") }])}
           keyExtractor={(row) => row.id}
           searchKeys={["name", "code"]}
           pageSize={10}

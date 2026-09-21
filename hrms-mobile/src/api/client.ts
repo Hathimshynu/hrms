@@ -14,6 +14,7 @@ export const api = axios.create({
 });
 
 let currentToken: string | null = null;
+let currentRefreshToken: string | null = null;
 
 // Never log this value - see CLAUDE.mobile.md ("never store sensitive
 // credentials insecurely") and the root security rules.
@@ -21,7 +22,15 @@ export function setAuthToken(token: string | null) {
   currentToken = token;
 }
 
+// Never log this value either.
+export function setRefreshToken(token: string | null) {
+  currentRefreshToken = token;
+}
+
 api.interceptors.request.use((config) => {
+  // Tells the backend this is a native client: it then returns the refresh
+  // token in the response body (browsers only ever get an HttpOnly cookie).
+  config.headers["X-Client-Type"] = "mobile";
   if (currentToken) {
     config.headers.Authorization = `Bearer ${currentToken}`;
   }
@@ -32,13 +41,15 @@ api.interceptors.request.use((config) => {
 // imports of the auth layer) to avoid a circular dependency between the
 // API client and AuthProvider, which itself needs the API client.
 let unauthorizedHandler: (() => void) | null = null;
-let tokenRefreshedHandler: ((token: string) => void) | null = null;
+let tokenRefreshedHandler: ((token: string, refreshToken: string | null) => void) | null = null;
 
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   unauthorizedHandler = handler;
 }
 
-export function setTokenRefreshedHandler(handler: ((token: string) => void) | null) {
+export function setTokenRefreshedHandler(
+  handler: ((token: string, refreshToken: string | null) => void) | null
+) {
   tokenRefreshedHandler = handler;
 }
 
@@ -52,13 +63,20 @@ function isAuthExempt(url?: string): boolean {
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
+  // No refresh token (e.g. a session from before refresh tokens existed): nothing to try.
+  if (!currentRefreshToken) return false;
+
   if (!refreshPromise) {
     refreshPromise = api
-      .post<{ success: boolean; data: { access_token: string } }>("/refresh")
+      .post<{ success: boolean; data: { access_token: string; refresh_token?: string } }>("/refresh", {
+        refresh_token: currentRefreshToken,
+      })
       .then((res) => {
-        const newToken = res.data.data.access_token;
-        setAuthToken(newToken);
-        tokenRefreshedHandler?.(newToken);
+        const { access_token, refresh_token } = res.data.data;
+        setAuthToken(access_token);
+        // Rotation: the previous refresh token is now dead, keep the new one.
+        if (refresh_token) setRefreshToken(refresh_token);
+        tokenRefreshedHandler?.(access_token, refresh_token ?? null);
         return true;
       })
       .catch(() => false)

@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  BarChart3,
   Boxes,
   CalendarCheck,
   CalendarClock,
@@ -132,6 +133,12 @@ const ALL_NAV_ITEMS: NavItem[] = [
     href: "/salary",
     icon: Wallet,
     module: MENU_MODULES.PAYROLL,
+  },
+  {
+    label: "Reports",
+    href: "/reports",
+    icon: BarChart3,
+    module: MENU_MODULES.REPORTS,
   },
   {
     label: "Masters",
